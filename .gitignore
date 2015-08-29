@@ -1,0 +1,9 @@
+*.dll
+*.suo
+*.pdb
+*.user
+bin
+obj
+*.config
+*.map
+*.js

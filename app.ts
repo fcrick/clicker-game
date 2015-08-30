@@ -6,14 +6,17 @@ var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
 
 // TODO:
-// - add github link to stream
-// - make game available
+// - add automation thing you can buy A-Tomato-Meter
+// - make my event code my generisized
+// - make game editable from inside the game
 // - change how costs can increase
 // - display income
 // - confirm on reset or have an undo
 // - add hidden currencies
 // - add autopurchasing currencies
 // - floating text that highlights progress
+// - give shoutouts to people who have helped - special thanks to Oppositions for that suggestion
+// - make achievements for karbz0ne
 
 interface SaveThingInfo {
     Count: number;
@@ -39,55 +42,55 @@ interface ThingType {
 
 var definitions = <ThingType[]>[
     {
-        name: 'Point',
-        display: 'Widget',
+        name: 'tt-Point',
+        display: 'Beer',
         capacity: 100,
     },
     {
-        name: 'Scorer',
-        display: 'Widget Spawner',
+        name: 'tt-Scorer',
+        display: 'Delivery Guy',
         cost: {
-            'Point': 10,
+            'tt-Point': 10,
         },
         income: {
-            'Point': 1,
+            'tt-Point': 1,
         },
     },
     {
-        name: 'PointHolder1',
-        display: 'Widget Box',
+        name: 'tt-PointHolder1',
+        display: 'Keg',
         cost: {
-            'Point': 25,
+            'tt-Point': 25,
         },
         capacityEffect: {
-            'Point': 10,
+            'tt-Point': 10,
         }
     },
     {
-        name: 'PointHolder2',
+        name: 'tt-PointHolder2',
         display: 'Garage',
         cost: {
-            'FixedPrice1': 20,
+            'tt-FixedPrice1': 10,
         },
         capacityEffect: {
-            'Point': 20,
+            'tt-Point': 25,
         }
     },
     {
-        name: 'PointHolder3',
-        display: 'Backyard',
+        name: 'tt-PointHolder3',
+        display: 'Swimming Pool',
         cost: {
-            'Point': 400,
+            'tt-Point': 400,
         },
         capacityEffect: {
-            'Point': 200,
+            'tt-Point': 200,
         }
     },
     {
-        name: 'FixedPrice1',
-        display: 'Wrench',
+        name: 'tt-FixedPrice1',
+        display: 'Benjamin',
         cost: {
-            'Point': 250,
+            'tt-Point': 250,
         },
         capacity: 100,
         costRatio: 1,
@@ -121,7 +124,7 @@ module Inventory {
                 }
 
                 purchaseCost.GetThingNames().forEach(needed => {
-                    Register('count', needed, callback);
+                    GetCountEvent(needed).Register(callback);
                 });
 
                 callback(GetCount(thingName));
@@ -141,9 +144,9 @@ module Inventory {
                 if (effect) {
                     var callback = (count) => {
                         var capacity = Inventory.GetCapacity(affectedName);
-                        fireCallback('capacity', affectedName, capacity);
+                        fireCallback(InvEvent.Capacity, affectedName, capacity);
                     };
-                    Register('count', thingName, callback);
+                    GetCountEvent(thingName).Register(callback);
                 }
             });
         });
@@ -170,8 +173,10 @@ module Inventory {
             return count;
         }
 
-        fireCallback('count', thingName, count);
+        //fireCallback(InvEvent.Count, thingName, count);
+        fireCountEvent(thingName, count, initialCount);
 
+        // clean me
         if (capacity && count >= capacity) {
             SetCapacityShown(thingName, true);
         }
@@ -180,14 +185,17 @@ module Inventory {
     }
 
     export function SetCount(thingName: string, count: number) {
-        if (saveData.Stuff[thingName].Count === count) {
+        var initialCount = saveData.Stuff[thingName].Count;
+        if (initialCount === count) {
             return count;
         }
 
         saveData.Stuff[thingName].Count = count;
 
-        fireCallback('count', thingName, count);
+        //fireCallback(InvEvent.Count, thingName, count);
+        fireCountEvent(thingName, count, initialCount);
 
+        // clean me
         var capacity = GetCapacity(thingName);
         if (capacity && count >= capacity) {
             SetCapacityShown(thingName, true);
@@ -205,10 +213,10 @@ module Inventory {
         saveData.Stuff[thingName].IsRevealed = revealed;
 
         if (revealed) {
-            fireCallback('reveal', thingName, 0);
+            fireCallback(InvEvent.Reveal, thingName, 0);
         }
         else {
-            fireCallback('hide', thingName, 0);
+            fireCallback(InvEvent.Hide, thingName, 0);
         }
     }
 
@@ -253,10 +261,10 @@ module Inventory {
         saveData.Stuff[thingName].IsCapShown = shown;
 
         if (shown) {
-            fireCallback('showcap', thingName, 0);
+            fireCallback(InvEvent.ShowCap, thingName, 0);
         }
         else {
-            fireCallback('hidecap', thingName, 0);
+            fireCallback(InvEvent.HideCap, thingName, 0);
         }
     }
 
@@ -273,10 +281,10 @@ module Inventory {
         enabledTable[thingName] = enabled;
 
         if (enabled) {
-            fireCallback('enable', thingName, 0);
+            fireCallback(InvEvent.Enable, thingName, 0);
         }
         else {
-            fireCallback('disable', thingName, 0);
+            fireCallback(InvEvent.Disable, thingName, 0);
         }
     }
 
@@ -343,8 +351,82 @@ module Inventory {
         return true;
     }
 
+    interface CountCallback { (count: number, previous: number): void; };
+    var countEvents: { [thingName: string]: Events.GameEvent<CountCallback> } = {};
+    export function GetCountEvent(thingName: string): Events.IGameEvent<CountCallback> {
+        return getThingEvent(thingName, countEvents);
+    }
+
+    function fireCountEvent(thingName: string, count: number, previous: number) {
+        var event = countEvents[thingName];
+        if (!event) {
+            return;
+        }
+
+        event.Fire(callback => callback(count, previous));
+    }
+
+    function getThingEvent<T>(
+        thingName: string,
+        eventTable: { [index: string]: Events.GameEvent<T> }
+    ): Events.IGameEvent<T> {
+
+        var event = eventTable[thingName];
+        if (!event) {
+            event = eventTable[thingName] = new Events.GameEvent<T>();
+        }
+
+        return event;
+    }
+
     var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (count: number): void }[] } } = {};
     var enabledTable: { [index: string]: boolean } = {};
+}
+
+module Events {
+    export interface IGameEvent<T> {
+        Register: (callback: T) => void;
+        Unregister: (callback: T) => void;
+    }
+
+    export class GameEvent<T> implements IGameEvent<T> {
+        callbacks: T[] = [];
+
+        public Register(callback: T) {
+            this.callbacks.push(callback);
+        }
+
+        public Unregister(callback: T) {
+            var index = this.callbacks.indexOf(callback);
+
+            if (index === -1) {
+                return false;
+            }
+
+            this.callbacks.splice(index, 1);
+            return true;
+        }
+
+        public Fire(caller: (callback: T) => void) {
+            this.callbacks.forEach(callback => caller(callback));
+        }
+    }
+}
+
+module InvEvent {
+    export var Capacity = 'capacity';
+
+    // controls whether buy buttons are enabled
+    export var Enable = 'enable';
+    export var Disable = 'disable';
+
+    // controls visibility of things
+    export var Reveal = 'reveal';
+    export var Hide = 'hide';
+
+    // thing capacity visibility
+    export var ShowCap = 'showcap';
+    export var HideCap = 'hidecap';
 }
 
 function getButtonText(thingName) {
@@ -373,7 +455,7 @@ function createInventory() {
         var create = () => {
             createThingRow(thingName);
         }
-        Inventory.Register('reveal', thingName, create);
+        Inventory.Register(InvEvent.Reveal, thingName, create);
     });
 }
 
@@ -381,8 +463,8 @@ function createThingRow(thingName: string) {
     var outerDiv = document.createElement('div');
     outerDiv.className = 'row';
 
-    var toUnregister = [];
-    var unregisterMe = (eventName: string, callback: (count?: number) => void) => toUnregister.push([eventName, callback]);
+    var toUnregister: { (): void }[] = [];
+    var unregisterMe = callback => toUnregister.push(callback);
 
     outerDiv.appendChild(createName(defByName[thingName].display));
     outerDiv.appendChild(createCountDiv(thingName));
@@ -390,11 +472,12 @@ function createThingRow(thingName: string) {
 
     var hideThingRow = () => {
         outerDiv.parentElement.removeChild(outerDiv);
-        Inventory.Unregister('hide', thingName, hideThingRow);
+        Inventory.Unregister(InvEvent.Hide, thingName, hideThingRow);
 
-        toUnregister.forEach(unreg => Inventory.Unregister(unreg[0], thingName, unreg[1]));
+        //Inventory.Unregister(unreg[0], thingName, unreg[1])
+        toUnregister.forEach(unreg => unreg());
     };
-    Inventory.Register('hide', thingName, hideThingRow);
+    Inventory.Register(InvEvent.Hide, thingName, hideThingRow);
 
     document.getElementById('inventory').appendChild(outerDiv);
 }
@@ -409,7 +492,10 @@ function createCountDiv(thingName: string) {
 
     var updateCount = (count:number) => currentDiv.innerText = count.toString();
     updateCount(count);
-    Inventory.Register('count', thingName, updateCount);
+
+    // TODO: make sure this gets unregistered
+    Inventory.GetCountEvent(thingName).Register(updateCount);
+
     currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
 
@@ -420,9 +506,9 @@ function createCountDiv(thingName: string) {
     else {
         var callback = count => {
             createCapacity(thingName, countDiv);
-            Inventory.Unregister('showcap', thingName, callback);
+            Inventory.Unregister(InvEvent.ShowCap, thingName, callback);
         }
-        Inventory.Register('showcap', thingName, callback);
+        Inventory.Register(InvEvent.ShowCap, thingName, callback);
     }
 
     countDiv.className = cellClass;
@@ -439,7 +525,7 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement) {
 
     var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
     updateCapacity(Inventory.GetCapacity(thingName));
-    Inventory.Register('capacity', thingName, updateCapacity);
+    Inventory.Register(InvEvent.Capacity, thingName, updateCapacity);
     capacityDiv.className = cellClass;
 
     [slashDiv, capacityDiv].forEach(div => countDiv.appendChild(div));
@@ -454,7 +540,7 @@ function createName(display: string) {
     return nameDiv;
 }
 
-function createButton(thingName: string, unregisterMe: (eventName:string, callback: (count?: number) => void) => void) {
+function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): void }) {
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
 
@@ -464,16 +550,16 @@ function createButton(thingName: string, unregisterMe: (eventName:string, callba
     var updateButton: (count?: number) => void = () => buyButton.innerText = getButtonText(thingName);
     updateButton();
 
-    Inventory.Register('count', thingName, updateButton);
-    unregisterMe('count', updateButton);
+    Inventory.GetCountEvent(thingName).Register(updateButton);
+    unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateButton));
 
     var enableButton = () => buyButton.disabled = false;
-    Inventory.Register('enable', thingName, enableButton);
-    unregisterMe('enable', enableButton);
+    Inventory.Register(InvEvent.Enable, thingName, enableButton);
+    unregisterMe(() => Inventory.Unregister(InvEvent.Enable, thingName, enableButton));
 
     var disableButton = () => buyButton.disabled = true;
-    Inventory.Register('disable', thingName, disableButton);
-    unregisterMe('disable', disableButton);
+    Inventory.Register(InvEvent.Disable, thingName, disableButton);
+    unregisterMe(() => Inventory.Unregister(InvEvent.Disable, thingName, disableButton));
 
     if (Inventory.IsEnabled(thingName)) {
         enableButton();
@@ -481,7 +567,6 @@ function createButton(thingName: string, unregisterMe: (eventName:string, callba
     else {
         disableButton();
     }
-
 
     buyButton.classList.add('btn');
     buyButton.classList.add('btn-primary');

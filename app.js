@@ -5,55 +5,55 @@ resetButton.addEventListener('click', resetEverything, false);
 var saveData;
 var definitions = [
     {
-        name: 'Point',
-        display: 'Widget',
+        name: 'tt-Point',
+        display: 'Beer',
         capacity: 100,
     },
     {
-        name: 'Scorer',
-        display: 'Widget Spawner',
+        name: 'tt-Scorer',
+        display: 'Delivery Guy',
         cost: {
-            'Point': 10,
+            'tt-Point': 10,
         },
         income: {
-            'Point': 1,
+            'tt-Point': 1,
         },
     },
     {
-        name: 'PointHolder1',
-        display: 'Widget Box',
+        name: 'tt-PointHolder1',
+        display: 'Keg',
         cost: {
-            'Point': 25,
+            'tt-Point': 25,
         },
         capacityEffect: {
-            'Point': 10,
+            'tt-Point': 10,
         }
     },
     {
-        name: 'PointHolder2',
+        name: 'tt-PointHolder2',
         display: 'Garage',
         cost: {
-            'FixedPrice1': 20,
+            'tt-FixedPrice1': 10,
         },
         capacityEffect: {
-            'Point': 20,
+            'tt-Point': 25,
         }
     },
     {
-        name: 'PointHolder3',
-        display: 'Backyard',
+        name: 'tt-PointHolder3',
+        display: 'Swimming Pool',
         cost: {
-            'Point': 400,
+            'tt-Point': 400,
         },
         capacityEffect: {
-            'Point': 200,
+            'tt-Point': 200,
         }
     },
     {
-        name: 'FixedPrice1',
-        display: 'Wrench',
+        name: 'tt-FixedPrice1',
+        display: 'Benjamin',
         cost: {
-            'Point': 250,
+            'tt-Point': 250,
         },
         capacity: 100,
         costRatio: 1,
@@ -83,7 +83,7 @@ var Inventory;
                     // add button disable
                 };
                 purchaseCost.GetThingNames().forEach(function (needed) {
-                    Register('count', needed, callback);
+                    GetCountEvent(needed).Register(callback);
                 });
                 callback(GetCount(thingName));
             }
@@ -99,9 +99,9 @@ var Inventory;
                 if (effect) {
                     var callback = function (count) {
                         var capacity = Inventory.GetCapacity(affectedName);
-                        fireCallback('capacity', affectedName, capacity);
+                        fireCallback(InvEvent.Capacity, affectedName, capacity);
                     };
-                    Register('count', thingName, callback);
+                    GetCountEvent(thingName).Register(callback);
                 }
             });
         });
@@ -125,7 +125,9 @@ var Inventory;
         if (count === initialCount) {
             return count;
         }
-        fireCallback('count', thingName, count);
+        //fireCallback(InvEvent.Count, thingName, count);
+        fireCountEvent(thingName, count, initialCount);
+        // clean me
         if (capacity && count >= capacity) {
             SetCapacityShown(thingName, true);
         }
@@ -133,11 +135,14 @@ var Inventory;
     }
     Inventory.ChangeCount = ChangeCount;
     function SetCount(thingName, count) {
-        if (saveData.Stuff[thingName].Count === count) {
+        var initialCount = saveData.Stuff[thingName].Count;
+        if (initialCount === count) {
             return count;
         }
         saveData.Stuff[thingName].Count = count;
-        fireCallback('count', thingName, count);
+        //fireCallback(InvEvent.Count, thingName, count);
+        fireCountEvent(thingName, count, initialCount);
+        // clean me
         var capacity = GetCapacity(thingName);
         if (capacity && count >= capacity) {
             SetCapacityShown(thingName, true);
@@ -152,10 +157,10 @@ var Inventory;
         }
         saveData.Stuff[thingName].IsRevealed = revealed;
         if (revealed) {
-            fireCallback('reveal', thingName, 0);
+            fireCallback(InvEvent.Reveal, thingName, 0);
         }
         else {
-            fireCallback('hide', thingName, 0);
+            fireCallback(InvEvent.Hide, thingName, 0);
         }
     }
     Inventory.SetReveal = SetReveal;
@@ -193,10 +198,10 @@ var Inventory;
         }
         saveData.Stuff[thingName].IsCapShown = shown;
         if (shown) {
-            fireCallback('showcap', thingName, 0);
+            fireCallback(InvEvent.ShowCap, thingName, 0);
         }
         else {
-            fireCallback('hidecap', thingName, 0);
+            fireCallback(InvEvent.HideCap, thingName, 0);
         }
     }
     Inventory.SetCapacityShown = SetCapacityShown;
@@ -211,10 +216,10 @@ var Inventory;
         }
         enabledTable[thingName] = enabled;
         if (enabled) {
-            fireCallback('enable', thingName, 0);
+            fireCallback(InvEvent.Enable, thingName, 0);
         }
         else {
-            fireCallback('disable', thingName, 0);
+            fireCallback(InvEvent.Disable, thingName, 0);
         }
     }
     Inventory.SetEnabled = SetEnabled;
@@ -272,9 +277,66 @@ var Inventory;
         return true;
     }
     Inventory.Unregister = Unregister;
+    ;
+    var countEvents = {};
+    function GetCountEvent(thingName) {
+        return getThingEvent(thingName, countEvents);
+    }
+    Inventory.GetCountEvent = GetCountEvent;
+    function fireCountEvent(thingName, count, previous) {
+        var event = countEvents[thingName];
+        if (!event) {
+            return;
+        }
+        event.Fire(function (callback) { return callback(count, previous); });
+    }
+    function getThingEvent(thingName, eventTable) {
+        var event = eventTable[thingName];
+        if (!event) {
+            event = eventTable[thingName] = new Events.GameEvent();
+        }
+        return event;
+    }
     var eventNameToThingNameToCallbacks = {};
     var enabledTable = {};
 })(Inventory || (Inventory = {}));
+var Events;
+(function (Events) {
+    var GameEvent = (function () {
+        function GameEvent() {
+            this.callbacks = [];
+        }
+        GameEvent.prototype.Register = function (callback) {
+            this.callbacks.push(callback);
+        };
+        GameEvent.prototype.Unregister = function (callback) {
+            var index = this.callbacks.indexOf(callback);
+            if (index === -1) {
+                return false;
+            }
+            this.callbacks.splice(index, 1);
+            return true;
+        };
+        GameEvent.prototype.Fire = function (caller) {
+            this.callbacks.forEach(function (callback) { return caller(callback); });
+        };
+        return GameEvent;
+    })();
+    Events.GameEvent = GameEvent;
+})(Events || (Events = {}));
+var InvEvent;
+(function (InvEvent) {
+    InvEvent.Capacity = 'capacity';
+    // controls whether buy buttons are enabled
+    InvEvent.Enable = 'enable';
+    InvEvent.Disable = 'disable';
+    // controls visibility of things
+    InvEvent.Reveal = 'reveal';
+    InvEvent.Hide = 'hide';
+    // thing capacity visibility
+    InvEvent.ShowCap = 'showcap';
+    InvEvent.HideCap = 'hidecap';
+})(InvEvent || (InvEvent = {}));
 function getButtonText(thingName) {
     var thingType = defByName[thingName];
     var cost = new PurchaseCost(thingName);
@@ -294,23 +356,24 @@ function createInventory() {
         var create = function () {
             createThingRow(thingName);
         };
-        Inventory.Register('reveal', thingName, create);
+        Inventory.Register(InvEvent.Reveal, thingName, create);
     });
 }
 function createThingRow(thingName) {
     var outerDiv = document.createElement('div');
     outerDiv.className = 'row';
     var toUnregister = [];
-    var unregisterMe = function (eventName, callback) { return toUnregister.push([eventName, callback]); };
+    var unregisterMe = function (callback) { return toUnregister.push(callback); };
     outerDiv.appendChild(createName(defByName[thingName].display));
     outerDiv.appendChild(createCountDiv(thingName));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
     var hideThingRow = function () {
         outerDiv.parentElement.removeChild(outerDiv);
-        Inventory.Unregister('hide', thingName, hideThingRow);
-        toUnregister.forEach(function (unreg) { return Inventory.Unregister(unreg[0], thingName, unreg[1]); });
+        Inventory.Unregister(InvEvent.Hide, thingName, hideThingRow);
+        //Inventory.Unregister(unreg[0], thingName, unreg[1])
+        toUnregister.forEach(function (unreg) { return unreg(); });
     };
-    Inventory.Register('hide', thingName, hideThingRow);
+    Inventory.Register(InvEvent.Hide, thingName, hideThingRow);
     document.getElementById('inventory').appendChild(outerDiv);
 }
 function createCountDiv(thingName) {
@@ -320,7 +383,8 @@ function createCountDiv(thingName) {
     var count = Inventory.GetCount(thingName);
     var updateCount = function (count) { return currentDiv.innerText = count.toString(); };
     updateCount(count);
-    Inventory.Register('count', thingName, updateCount);
+    // TODO: make sure this gets unregistered
+    Inventory.GetCountEvent(thingName).Register(updateCount);
     currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
     var capShown = Inventory.IsCapacityShown(thingName);
@@ -330,9 +394,9 @@ function createCountDiv(thingName) {
     else {
         var callback = function (count) {
             createCapacity(thingName, countDiv);
-            Inventory.Unregister('showcap', thingName, callback);
+            Inventory.Unregister(InvEvent.ShowCap, thingName, callback);
         };
-        Inventory.Register('showcap', thingName, callback);
+        Inventory.Register(InvEvent.ShowCap, thingName, callback);
     }
     countDiv.className = cellClass;
     return countDiv;
@@ -345,7 +409,7 @@ function createCapacity(thingName, countDiv) {
     capacityDiv.id = 'capacity-' + thingName;
     var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
     updateCapacity(Inventory.GetCapacity(thingName));
-    Inventory.Register('capacity', thingName, updateCapacity);
+    Inventory.Register(InvEvent.Capacity, thingName, updateCapacity);
     capacityDiv.className = cellClass;
     [slashDiv, capacityDiv].forEach(function (div) { return countDiv.appendChild(div); });
 }
@@ -362,14 +426,14 @@ function createButton(thingName, unregisterMe) {
     var id = buyButton.id = 'buy-' + thingName;
     var updateButton = function () { return buyButton.innerText = getButtonText(thingName); };
     updateButton();
-    Inventory.Register('count', thingName, updateButton);
-    unregisterMe('count', updateButton);
+    Inventory.GetCountEvent(thingName).Register(updateButton);
+    unregisterMe(function () { return Inventory.GetCountEvent(thingName).Unregister(updateButton); });
     var enableButton = function () { return buyButton.disabled = false; };
-    Inventory.Register('enable', thingName, enableButton);
-    unregisterMe('enable', enableButton);
+    Inventory.Register(InvEvent.Enable, thingName, enableButton);
+    unregisterMe(function () { return Inventory.Unregister(InvEvent.Enable, thingName, enableButton); });
     var disableButton = function () { return buyButton.disabled = true; };
-    Inventory.Register('disable', thingName, disableButton);
-    unregisterMe('disable', disableButton);
+    Inventory.Register(InvEvent.Disable, thingName, disableButton);
+    unregisterMe(function () { return Inventory.Unregister(InvEvent.Disable, thingName, disableButton); });
     if (Inventory.IsEnabled(thingName)) {
         enableButton();
     }

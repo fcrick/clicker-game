@@ -6,4 +6,3 @@ bin
 obj
 *.config
 *.map
-*.js

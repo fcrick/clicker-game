@@ -215,12 +215,7 @@ var Inventory;
             return;
         }
         enabledTable[thingName] = enabled;
-        if (enabled) {
-            fireCallback(InvEvent.Enable, thingName, 0);
-        }
-        else {
-            fireCallback(InvEvent.Disable, thingName, 0);
-        }
+        fireEnableEvent(thingName, enabled);
     }
     Inventory.SetEnabled = SetEnabled;
     function IsEnabled(thingName) {
@@ -279,6 +274,7 @@ var Inventory;
     Inventory.Unregister = Unregister;
     ;
     ;
+    ;
     // Count events
     var countEvents = {};
     function GetCountEvent(thingName) {
@@ -296,6 +292,15 @@ var Inventory;
     Inventory.GetCapacityEvent = GetCapacityEvent;
     function fireCapacityEvent(thingName, capacity) {
         fireThingEvent(thingName, capacityEvents, function (callback) { return callback(capacity); });
+    }
+    // Enable events (enabling and disabling buy buttons)
+    var enableEvents = {};
+    function GetEnableEvent(thingName) {
+        return getThingEvent(thingName, enableEvents);
+    }
+    Inventory.GetEnableEvent = GetEnableEvent;
+    function fireEnableEvent(thingName, enabled) {
+        fireThingEvent(thingName, enableEvents, function (callback) { return callback(enabled); });
     }
     function fireThingEvent(thingName, eventTable, caller) {
         var event = eventTable[thingName];
@@ -340,9 +345,6 @@ var Events;
 })(Events || (Events = {}));
 var InvEvent;
 (function (InvEvent) {
-    // controls whether buy buttons are enabled
-    InvEvent.Enable = 'enable';
-    InvEvent.Disable = 'disable';
     // controls visibility of things
     InvEvent.Reveal = 'reveal';
     InvEvent.Hide = 'hide';
@@ -442,18 +444,10 @@ function createButton(thingName, unregisterMe) {
     updateButton();
     Inventory.GetCountEvent(thingName).Register(updateButton);
     unregisterMe(function () { return Inventory.GetCountEvent(thingName).Unregister(updateButton); });
-    var enableButton = function () { return buyButton.disabled = false; };
-    Inventory.Register(InvEvent.Enable, thingName, enableButton);
-    unregisterMe(function () { return Inventory.Unregister(InvEvent.Enable, thingName, enableButton); });
-    var disableButton = function () { return buyButton.disabled = true; };
-    Inventory.Register(InvEvent.Disable, thingName, disableButton);
-    unregisterMe(function () { return Inventory.Unregister(InvEvent.Disable, thingName, disableButton); });
-    if (Inventory.IsEnabled(thingName)) {
-        enableButton();
-    }
-    else {
-        disableButton();
-    }
+    var enableDisableButton = function (enabled) { return buyButton.disabled = !enabled; };
+    Inventory.GetEnableEvent(thingName).Register(enableDisableButton);
+    unregisterMe(function () { return Inventory.GetEnableEvent(thingName).Unregister(enableDisableButton); });
+    enableDisableButton(Inventory.IsEnabled(thingName));
     buyButton.classList.add('btn');
     buyButton.classList.add('btn-primary');
     buyButton.addEventListener('click', function () { tryBuy(thingName); });

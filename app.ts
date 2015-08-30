@@ -279,13 +279,7 @@ module Inventory {
         }
 
         enabledTable[thingName] = enabled;
-
-        if (enabled) {
-            fireCallback(InvEvent.Enable, thingName, 0);
-        }
-        else {
-            fireCallback(InvEvent.Disable, thingName, 0);
-        }
+        fireEnableEvent(thingName, enabled);
     }
 
     export function IsEnabled(thingName: string) {
@@ -354,6 +348,7 @@ module Inventory {
     // event callback interfaces
     interface CountCallback { (count: number, previous: number): void; };
     interface CapacityCallback { (capacity: number): void; };
+    interface EnableCallback { (enabled: boolean): void; };
 
     // Count events
     var countEvents: { [thingName: string]: Events.GameEvent<CountCallback> } = {};
@@ -371,6 +366,15 @@ module Inventory {
     }
     function fireCapacityEvent(thingName: string, capacity: number) {
         fireThingEvent(thingName, capacityEvents, callback => callback(capacity));
+    }
+
+    // Enable events (enabling and disabling buy buttons)
+    var enableEvents: { [thingName: string]: Events.GameEvent<EnableCallback> } = {};
+    export function GetEnableEvent(thingName: string): Events.IGameEvent<EnableCallback> {
+        return getThingEvent(thingName, enableEvents);
+    }
+    function fireEnableEvent(thingName: string, enabled: boolean) {
+        fireThingEvent(thingName, enableEvents, callback => callback(enabled));
     }
 
     function fireThingEvent<T>(
@@ -434,10 +438,6 @@ module Events {
 }
 
 module InvEvent {
-    // controls whether buy buttons are enabled
-    export var Enable = 'enable';
-    export var Disable = 'disable';
-
     // controls visibility of things
     export var Reveal = 'reveal';
     export var Hide = 'hide';
@@ -572,20 +572,11 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
     Inventory.GetCountEvent(thingName).Register(updateButton);
     unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateButton));
 
-    var enableButton = () => buyButton.disabled = false;
-    Inventory.Register(InvEvent.Enable, thingName, enableButton);
-    unregisterMe(() => Inventory.Unregister(InvEvent.Enable, thingName, enableButton));
+    var enableDisableButton = (enabled) => buyButton.disabled = !enabled;
+    Inventory.GetEnableEvent(thingName).Register(enableDisableButton);
+    unregisterMe(() => Inventory.GetEnableEvent(thingName).Unregister(enableDisableButton));
 
-    var disableButton = () => buyButton.disabled = true;
-    Inventory.Register(InvEvent.Disable, thingName, disableButton);
-    unregisterMe(() => Inventory.Unregister(InvEvent.Disable, thingName, disableButton));
-
-    if (Inventory.IsEnabled(thingName)) {
-        enableButton();
-    }
-    else {
-        disableButton();
-    }
+    enableDisableButton(Inventory.IsEnabled(thingName));
 
     buyButton.classList.add('btn');
     buyButton.classList.add('btn-primary');

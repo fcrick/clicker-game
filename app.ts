@@ -81,6 +81,26 @@ module Inventory {
 
     export function Initialize() {
         definitions.forEach(thingType => {
+            var thingName = thingType.name;
+            var cost = thingType.cost;
+
+            if (!cost) {
+                SetReveal(thingName, true);
+            }
+            else {
+                var purchaseCost = new PurchaseCost(thingType.name);
+                var callback = count => {
+                    if (purchaseCost.CanAfford()) {
+                        Inventory.SetReveal(thingName, true);
+                    }
+                    // add button disable
+                }
+
+                purchaseCost.GetThingNames().forEach(needed => {
+                    Inventory.Register('count', needed, callback);
+                });
+            }
+
             var capacityEffect = thingType.capacityEffect;
             if (!capacityEffect)
                 return;
@@ -92,7 +112,7 @@ module Inventory {
                         var capacity = getCapacity(affectedName);
                         fireCallback('capacity', affectedName, capacity);
                     };
-                    Register('count', thingType.name, callback);
+                    Register('count', thingName, callback);
                 }
             });
         });
@@ -137,19 +157,35 @@ module Inventory {
     }
 
     export function SetReveal(thingName: string, revealed: boolean) {
+        var current = saveData.Stuff[thingName].IsRevealed;
+        if (current === revealed) {
+            return;
+        }
+
         saveData.Stuff[thingName].IsRevealed = revealed;
+
+        if (revealed) {
+            fireCallback('reveal', thingName, 0);
+        }
+        else {
+            fireCallback('hide', thingName, 0);
+        }
     }
 
     export function IsRevealed(thingName: string) {
         return saveData.Stuff[thingName].IsRevealed;
     }
 
+    // full game reset
     export function Reset() {
         definitions.forEach(thingType => {
             var thingName = thingType.name;
 
             SetCount(thingName, 0);
-            SetReveal(thingName, false);
+
+            if (thingType.cost) {
+                SetReveal(thingName, false);
+            }
         });
     }
 
@@ -201,41 +237,6 @@ module Inventory {
     }
 
     var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (count: number): void }[] } } = {};
-}
-
-function updateDiplay() {
-    updateButtons();
-}
-
-function updateButtons() {
-    definitions.forEach(function (typeDef) {
-        var thingName = typeDef.name;
-        var id = 'buy-' + thingName;
-        var display = typeDef.display;
-        var button = document.getElementById(id);
-        if (!button) {
-            return;
-        }
-
-        var cost = new PurchaseCost(thingName);
-
-        if (cost.CanAfford()) {
-            Inventory.SetReveal(thingName, true);
-        }
-
-        if (!Inventory.IsRevealed(thingName)) {
-            button.style.visibility = 'hidden';
-            return;
-        }
-
-        if (button.style.visibility && button.style.visibility === 'hidden') {
-            button.style.visibility = 'visible';
-        }
-
-        if (!cost.GetThingNames()) {
-            Inventory.SetReveal(thingName, true);
-        }
-    });
 }
 
 function getButtonText(thingName) {
@@ -301,26 +302,47 @@ function createInventory() {
         countDiv.className = cellClass;
         outerDiv.appendChild(countDiv);
 
-        var buttonDiv = document.createElement('div');
-        buttonDiv.className = cellClass;
+        if (Inventory.IsRevealed(thingName)) {
+            var buttonDiv = createButton(thingName, cellClass);
 
-        var buyButton = document.createElement('button');
-        buyButton.id = 'buy-' + thingName;
+            outerDiv.appendChild(buttonDiv);
+        }
+        else {
+            Inventory.Register('reveal', thingName, count => {
+                var buttonDiv = createButton(thingName, cellClass);
 
-        var updateButton = count => buyButton.innerText = getButtonText(thingName);
-        updateButton(count);
-        Inventory.Register('count', thingName, updateButton);
+                outerDiv.appendChild(buttonDiv);
+            });
+        }
 
-        buyButton.classList.add('btn');
-        buyButton.classList.add('btn-primary');
-        buyButton.addEventListener('click', function () { tryBuy(thingName); });
-
-        buttonDiv.appendChild(buyButton);
-
-        outerDiv.appendChild(buttonDiv);
-        
         inventory.appendChild(outerDiv);
     });
+}
+
+function createButton(thingName: string, cellClass: string) {
+    var buttonDiv = document.createElement('div');
+    buttonDiv.className = cellClass;
+
+    var buyButton = document.createElement('button');
+    buyButton.id = 'buy-' + thingName;
+
+    var updateButton = count => buyButton.innerText = getButtonText(thingName);
+    updateButton(Inventory.GetCount(thingName));
+    Inventory.Register('count', thingName, updateButton);
+
+    buyButton.classList.add('btn');
+    buyButton.classList.add('btn-primary');
+    buyButton.addEventListener('click', function () { tryBuy(thingName); });
+
+    buttonDiv.appendChild(buyButton);
+
+    var hideButton = () => {
+        buttonDiv.parentElement.removeChild(buttonDiv);
+        Inventory.Unregister('count', thingName, updateButton);
+    };
+    Inventory.Register('hide', thingName, hideButton);
+
+    return buttonDiv;
 }
 
 class PurchaseCost {

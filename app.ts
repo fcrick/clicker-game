@@ -6,6 +6,9 @@ var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
 
 // TODO:
+// - get rid of updateButtons and make updates event driven
+// - add github link to stream
+// - make game available
 // - change how costs can increase
 // - buy buttons should only be enabled when you can afford the purchase
 // - display income
@@ -75,6 +78,26 @@ var defByName: { [index: string]: ThingType } = {};
 definitions.forEach(thingType => defByName[thingType.name] = thingType);
 
 module Inventory {
+
+    export function Initialize() {
+        definitions.forEach(thingType => {
+            var capacityEffect = thingType.capacityEffect;
+            if (!capacityEffect)
+                return;
+
+            Object.keys(capacityEffect).forEach(affectedName => {
+                var effect = capacityEffect[affectedName];
+                if (effect) {
+                    var callback = (count) => {
+                        var capacity = getCapacity(affectedName);
+                        fireCallback('capacity', affectedName, capacity);
+                    };
+                    Register('count', thingType.name, callback);
+                }
+            });
+        });
+    }
+
     export function GetCount(thingName: string) {
         return saveData.Stuff[thingName].Count;
     }
@@ -138,11 +161,11 @@ module Inventory {
 
         var callbacks = thingNameToCallbacks[thingName];
         if (callbacks) {
-            callbacks.forEach(callback => callback(thingName, count));
+            callbacks.forEach(callback => callback(count));
         }
     }
 
-    export function Register(eventName: string, thingName: string, callback: (thingName: string, count: number) => void) {
+    export function Register(eventName: string, thingName: string, callback: (count: number) => void) {
         var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName]
         if (!thingNameToCallbacks) {
             thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName] = {};
@@ -156,7 +179,7 @@ module Inventory {
         callbacks.push(callback);
     }
 
-    export function Unregister(eventName: string, thingName: string, callback: (thingName: string, count: number) => void) {
+    export function Unregister(eventName: string, thingName: string, callback: (count: number) => void) {
         var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName];
         if (!thingNameToCallbacks) {
             return false;
@@ -177,12 +200,11 @@ module Inventory {
         return true;
     }
 
-    var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (thingName: string, count: number): void }[] } } = {};
+    var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (count: number): void }[] } } = {};
 }
 
 function updateDiplay() {
     updateButtons();
-    updateInventory();
 }
 
 function updateButtons() {
@@ -210,33 +232,23 @@ function updateButtons() {
             button.style.visibility = 'visible';
         }
 
-        var costString = cost.GetThingNames().map(name => cost.GetCost(name) + ' ' + defByName[name].display).join(', ');
-
-        if (!costString) {
-            costString = "FREE!";
+        if (!cost.GetThingNames()) {
             Inventory.SetReveal(thingName, true);
         }
-
-        button.innerText = 'Buy a ' + display + ' for ' + costString;
     });
 }
 
-function updateInventory() {
-    definitions.forEach(thingDef => {
-        var thingName = thingDef.name;
+function getButtonText(thingName) {
+    var thingType = defByName[thingName];
 
-        //var currentDiv = document.getElementById('current-' + thingName);
-        //var count = Inventory.GetCount(thingName);
-        //if (currentDiv) {
-        //    currentDiv.innerText = count.toString();
-        //}
+    var cost = new PurchaseCost(thingName);
+    var costString = cost.GetThingNames().map(name => cost.GetCost(name) + ' ' + defByName[name].display).join(', ');
 
-        var capacityDiv = document.getElementById('capacity-' + thingName);
-        var capacity = getCapacity(thingName);
-        if (capacityDiv && capacity) {
-            capacityDiv.innerText = capacity.toString();
-        }
-    });
+    if (!costString) {
+        costString = "FREE!";
+    }
+
+    return 'Buy a ' + thingType.display + ' for ' + costString;
 }
 
 function createInventory() {
@@ -264,10 +276,8 @@ function createInventory() {
         var currentDiv = document.createElement('div');
         currentDiv.id = 'current-' + thingName;
 
-        var updateCount = (name, count) => {
-            currentDiv.innerText = count.toString();
-        };
-        updateCount(thingName, count);
+        var updateCount = count => currentDiv.innerText = count.toString();
+        updateCount(count);
         Inventory.Register('count', thingName, updateCount);
         currentDiv.className = cellClass;
         countDiv.appendChild(currentDiv);
@@ -280,7 +290,10 @@ function createInventory() {
 
             var capacityDiv = document.createElement('div');
             capacityDiv.id = 'capacity-' + thingName;
-            capacityDiv.innerText = capacity.toString();
+
+            var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
+            updateCapacity(capacity);
+            Inventory.Register('capacity', thingName, updateCapacity);
             capacityDiv.className = cellClass;
             countDiv.appendChild(capacityDiv);
         }
@@ -293,9 +306,13 @@ function createInventory() {
 
         var buyButton = document.createElement('button');
         buyButton.id = 'buy-' + thingName;
+
+        var updateButton = count => buyButton.innerText = getButtonText(thingName);
+        updateButton(count);
+        Inventory.Register('count', thingName, updateButton);
+
         buyButton.classList.add('btn');
         buyButton.classList.add('btn-primary');
-        buyButton.innerText = "Buy";
         buyButton.addEventListener('click', function () { tryBuy(thingName); });
 
         buttonDiv.appendChild(buyButton);
@@ -436,6 +453,8 @@ function onLoad() {
         saveData = JSON.parse(localStorage['SaveData']);
     }
     catch (e) { }
+
+    Inventory.Initialize();
 
     initializeStuff();
     createInventory();

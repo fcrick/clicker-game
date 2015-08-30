@@ -9,14 +9,16 @@ resetButton.addEventListener('click', resetEverything, false);
 // - add github link to stream
 // - make game available
 // - change how costs can increase
-// - buy buttons should only be enabled when you can afford the purchase
 // - display income
 // - confirm on reset or have an undo
-// - hide capacity until it's been hit
+// - add hidden currencies
+// - add autopurchasing currencies
+// - floating text that highlights progress
 
 interface SaveThingInfo {
     Count: number;
-    IsRevealed?: boolean;
+    IsRevealed: boolean;
+    IsCapShown: boolean;
 }
 
 interface SaveData {
@@ -32,6 +34,7 @@ interface ThingType {
     capacity?: number;
     income?: { [index: string]: number };
     capacityEffect?: { [index: string]: number };
+    costRatio?: number;
 }
 
 var definitions = <ThingType[]>[
@@ -64,11 +67,30 @@ var definitions = <ThingType[]>[
         name: 'PointHolder2',
         display: 'Garage',
         cost: {
-            'PointHolder1': 10,
+            'FixedPrice1': 20,
         },
         capacityEffect: {
             'Point': 20,
         }
+    },
+    {
+        name: 'PointHolder3',
+        display: 'Backyard',
+        cost: {
+            'Point': 400,
+        },
+        capacityEffect: {
+            'Point': 200,
+        }
+    },
+    {
+        name: 'FixedPrice1',
+        display: 'Wrench',
+        cost: {
+            'Point': 250,
+        },
+        capacity: 100,
+        costRatio: 1,
     }
 ];
 
@@ -89,14 +111,25 @@ module Inventory {
                 var purchaseCost = new PurchaseCost(thingType.name);
                 var callback = count => {
                     if (purchaseCost.CanAfford()) {
-                        Inventory.SetReveal(thingName, true);
+                        SetReveal(thingName, true);
+                        SetEnabled(thingName, true);
+                    }
+                    else {
+                        SetEnabled(thingName, false);
                     }
                     // add button disable
                 }
 
                 purchaseCost.GetThingNames().forEach(needed => {
-                    Inventory.Register('count', needed, callback);
+                    Register('count', needed, callback);
                 });
+
+                callback(GetCount(thingName));
+            }
+
+            var capacity = GetCapacity(thingName);
+            if (capacity && GetCount(thingName) >= capacity) {
+                SetCapacityShown(thingName, true);
             }
 
             var capacityEffect = thingType.capacityEffect;
@@ -107,7 +140,7 @@ module Inventory {
                 var effect = capacityEffect[affectedName];
                 if (effect) {
                     var callback = (count) => {
-                        var capacity = getCapacity(affectedName);
+                        var capacity = Inventory.GetCapacity(affectedName);
                         fireCallback('capacity', affectedName, capacity);
                     };
                     Register('count', thingName, callback);
@@ -122,7 +155,7 @@ module Inventory {
 
     export function ChangeCount(thingName: string, delta: number) {
         var initialCount = saveData.Stuff[thingName].Count;
-        var capacity = getCapacity(thingName);
+        var capacity = Inventory.GetCapacity(thingName);
         var count = saveData.Stuff[thingName].Count += delta;
 
         if (capacity !== 0 && count > capacity) {
@@ -139,6 +172,10 @@ module Inventory {
 
         fireCallback('count', thingName, count);
 
+        if (capacity && count >= capacity) {
+            SetCapacityShown(thingName, true);
+        }
+
         return count;
     }
 
@@ -150,6 +187,11 @@ module Inventory {
         saveData.Stuff[thingName].Count = count;
 
         fireCallback('count', thingName, count);
+
+        var capacity = GetCapacity(thingName);
+        if (capacity && count >= capacity) {
+            SetCapacityShown(thingName, true);
+        }
 
         return count;
     }
@@ -174,16 +216,83 @@ module Inventory {
         return saveData.Stuff[thingName].IsRevealed;
     }
 
+    export function GetCapacity(thingName: string) {
+        var baseCapacity = 0;
+        var capacityDelta = 0;
+
+        var thingType = defByName[thingName]
+
+        var capacity = thingType.capacity
+        if (capacity) {
+            baseCapacity = thingType.capacity;
+        }
+
+        // TODO: make not wasteful
+        definitions.forEach(thingType => {
+            var capacityEffect = thingType.capacityEffect;
+            if (!capacityEffect) {
+                return;
+            }
+
+            var effect = thingType.capacityEffect[thingName];
+            var count = Inventory.GetCount(thingType.name);
+            if (effect && count) {
+                capacityDelta += effect * count;
+            }
+        });
+
+        return baseCapacity + capacityDelta;
+    }
+
+    export function SetCapacityShown(thingName: string, shown: boolean) {
+        var current = saveData.Stuff[thingName].IsCapShown;
+        if (current === shown) {
+            return;
+        }
+
+        saveData.Stuff[thingName].IsCapShown = shown;
+
+        if (shown) {
+            fireCallback('showcap', thingName, 0);
+        }
+        else {
+            fireCallback('hidecap', thingName, 0);
+        }
+    }
+
+    export function IsCapacityShown(thingName: string) {
+        return saveData.Stuff[thingName].IsCapShown;
+    }
+
+    export function SetEnabled(thingName: string, enabled: boolean) {
+        var current = enabledTable[thingName];
+        if (current === enabled) {
+            return;
+        }
+
+        enabledTable[thingName] = enabled;
+
+        if (enabled) {
+            fireCallback('enable', thingName, 0);
+        }
+        else {
+            fireCallback('disable', thingName, 0);
+        }
+    }
+
+    export function IsEnabled(thingName: string) {
+        var cost = new PurchaseCost(thingName);
+        return cost.CanAfford();
+    }
+
     // full game reset
     export function Reset() {
         definitions.forEach(thingType => {
             var thingName = thingType.name;
 
             SetCount(thingName, 0);
-
-            if (thingType.cost) {
-                SetReveal(thingName, false);
-            }
+            SetReveal(thingName, !thingType.cost);
+            SetCapacityShown(thingName, false);
         });
     }
 
@@ -235,6 +344,7 @@ module Inventory {
     }
 
     var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (count: number): void }[] } } = {};
+    var enabledTable: { [index: string]: boolean } = {};
 }
 
 function getButtonText(thingName) {
@@ -259,14 +369,11 @@ function createInventory() {
         if (Inventory.IsRevealed(thingName)) {
             createThingRow(thingName);
         }
-        else {
-            var create = () => {
-                createThingRow(thingName);
-                Inventory.Unregister('reveal', thingName, create);
-            }
 
-            Inventory.Register('reveal', thingName, create);
+        var create = () => {
+            createThingRow(thingName);
         }
+        Inventory.Register('reveal', thingName, create);
     });
 }
 
@@ -275,7 +382,7 @@ function createThingRow(thingName: string) {
     outerDiv.className = 'row';
 
     var toUnregister = [];
-    var unregisterMe = (callback: (count?: number) => void) => toUnregister.push(callback);
+    var unregisterMe = (eventName: string, callback: (count?: number) => void) => toUnregister.push([eventName, callback]);
 
     outerDiv.appendChild(createName(defByName[thingName].display));
     outerDiv.appendChild(createCountDiv(thingName));
@@ -285,7 +392,7 @@ function createThingRow(thingName: string) {
         outerDiv.parentElement.removeChild(outerDiv);
         Inventory.Unregister('hide', thingName, hideThingRow);
 
-        toUnregister.forEach(unreg => Inventory.Unregister('count', thingName, unreg));
+        toUnregister.forEach(unreg => Inventory.Unregister(unreg[0], thingName, unreg[1]));
     };
     Inventory.Register('hide', thingName, hideThingRow);
 
@@ -298,31 +405,44 @@ function createCountDiv(thingName: string) {
     var currentDiv = document.createElement('div');
     currentDiv.id = 'current-' + thingName;
 
-    var updateCount = count => currentDiv.innerText = count.toString();
-    updateCount(Inventory.GetCount(thingName));
+    var count = Inventory.GetCount(thingName);
+
+    var updateCount = (count:number) => currentDiv.innerText = count.toString();
+    updateCount(count);
     Inventory.Register('count', thingName, updateCount);
     currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
 
-    var capacity = getCapacity(thingName);
-    if (capacity) {
-        var slashDiv = document.createElement('div');
-        slashDiv.innerText = '/';
-        slashDiv.className = cellClass;
-        countDiv.appendChild(slashDiv);
-
-        var capacityDiv = document.createElement('div');
-        capacityDiv.id = 'capacity-' + thingName;
-
-        var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
-        updateCapacity(capacity);
-        Inventory.Register('capacity', thingName, updateCapacity);
-        capacityDiv.className = cellClass;
-        countDiv.appendChild(capacityDiv);
+    var capShown = Inventory.IsCapacityShown(thingName);
+    if (capShown) {
+        createCapacity(thingName, countDiv);
+    }
+    else {
+        var callback = count => {
+            createCapacity(thingName, countDiv);
+            Inventory.Unregister('showcap', thingName, callback);
+        }
+        Inventory.Register('showcap', thingName, callback);
     }
 
     countDiv.className = cellClass;
     return countDiv;
+}
+
+function createCapacity(thingName: string, countDiv: HTMLDivElement) {
+    var slashDiv = document.createElement('div');
+    slashDiv.innerText = '/';
+    slashDiv.className = cellClass;
+
+    var capacityDiv = document.createElement('div');
+    capacityDiv.id = 'capacity-' + thingName;
+
+    var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
+    updateCapacity(Inventory.GetCapacity(thingName));
+    Inventory.Register('capacity', thingName, updateCapacity);
+    capacityDiv.className = cellClass;
+
+    [slashDiv, capacityDiv].forEach(div => countDiv.appendChild(div));
 }
 
 function createName(display: string) {
@@ -334,7 +454,7 @@ function createName(display: string) {
     return nameDiv;
 }
 
-function createButton(thingName: string, unregisterMe: (callback: (count?: number) => void) => void) {
+function createButton(thingName: string, unregisterMe: (eventName:string, callback: (count?: number) => void) => void) {
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
 
@@ -345,7 +465,23 @@ function createButton(thingName: string, unregisterMe: (callback: (count?: numbe
     updateButton();
 
     Inventory.Register('count', thingName, updateButton);
-    unregisterMe(updateButton);
+    unregisterMe('count', updateButton);
+
+    var enableButton = () => buyButton.disabled = false;
+    Inventory.Register('enable', thingName, enableButton);
+    unregisterMe('enable', enableButton);
+
+    var disableButton = () => buyButton.disabled = true;
+    Inventory.Register('disable', thingName, disableButton);
+    unregisterMe('disable', disableButton);
+
+    if (Inventory.IsEnabled(thingName)) {
+        enableButton();
+    }
+    else {
+        disableButton();
+    }
+
 
     buyButton.classList.add('btn');
     buyButton.classList.add('btn-primary');
@@ -386,35 +522,16 @@ class PurchaseCost {
         if (!cost)
             return 0;
 
-        return Math.floor(cost * Math.pow(1.15, Inventory.GetCount(this.ThingToBuy)));
+        var ratio = defByName[this.ThingToBuy].costRatio;
+        if (!ratio) {
+            ratio = 1.15;
+        }
+
+        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.ThingToBuy)));
     }
 }
 
-function getCapacity(thingName) {
-    var baseCapacity = 0;
-    var capacityDelta = 0;
 
-    definitions.forEach(function (thingType) {
-        if (thingType.name === thingName) {
-            var capacity = thingType.capacity
-            if (capacity)
-                baseCapacity = thingType.capacity;
-        }
-
-        var capacityEffect = thingType.capacityEffect;
-        if (!capacityEffect) {
-            return;
-        }
-
-        var effect = thingType.capacityEffect[thingName];
-        var count = Inventory.GetCount(thingType.name);
-        if (effect && count) {
-            capacityDelta += effect * count;
-        }
-    });
-
-    return baseCapacity + capacityDelta;
-}
 
 function tryBuy(thingToBuy) {
     var cost = new PurchaseCost(thingToBuy);
@@ -424,7 +541,7 @@ function tryBuy(thingToBuy) {
         return;
     }
 
-    var capacity = getCapacity(thingToBuy);
+    var capacity = Inventory.GetCapacity(thingToBuy);
     if (capacity && capacity <= Inventory.GetCount(thingToBuy)) {
         return;
     }
@@ -462,6 +579,7 @@ function initializeSaveData() {
             stuff[thingType.name] = {
                 Count: 0,
                 IsRevealed: false,
+                IsCapShown: false,
             };
         }
     });

@@ -6,13 +6,11 @@ var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
 
 // TODO:
-// - get rid of updateButtons and make updates event driven
 // - add github link to stream
 // - make game available
 // - change how costs can increase
 // - buy buttons should only be enabled when you can afford the purchase
 // - display income
-// - make inventory less bad
 // - confirm on reset or have an undo
 // - hide capacity until it's been hit
 
@@ -38,38 +36,38 @@ interface ThingType {
 
 var definitions = <ThingType[]>[
     {
-        name: 'Cookie',
+        name: 'Point',
         display: 'Widget',
         capacity: 100,
     },
     {
-        name: 'Tapper',
+        name: 'Scorer',
         display: 'Widget Spawner',
         cost: {
-            'Cookie': 10,
+            'Point': 10,
         },
         income: {
-            'Cookie': 1,
+            'Point': 1,
         },
     },
     {
-        name: 'CookieJar',
+        name: 'PointHolder1',
         display: 'Widget Box',
         cost: {
-            'Cookie': 25,
+            'Point': 25,
         },
         capacityEffect: {
-            'Cookie': 10,
+            'Point': 10,
         }
     },
     {
-        name: 'Garage',
+        name: 'PointHolder2',
         display: 'Garage',
         cost: {
-            'CookieJar': 10,
+            'PointHolder1': 10,
         },
         capacityEffect: {
-            'Cookie': 20,
+            'Point': 20,
         }
     }
 ];
@@ -222,7 +220,7 @@ module Inventory {
         }
 
         var callbacks = thingNameToCallbacks[thingName];
-        if (callbacks) {
+        if (!callbacks) {
             return false;
         }
 
@@ -252,95 +250,108 @@ function getButtonText(thingName) {
     return 'Buy a ' + thingType.display + ' for ' + costString;
 }
 
+var cellClass = 'col-sm-2';
+
 function createInventory() {
-    var inventory = document.getElementById('inventory');
-
-    var cellClass = 'col-sm-2';
-
-    definitions.forEach(thingDef => {
-        var thingName = thingDef.name;
-
-        var count = Inventory.GetCount(thingName);
-        var capacity = getCapacity(thingName);
-        var display = thingDef.display;
-
-        var outerDiv = document.createElement('div');
-        outerDiv.classList.add('row');
-
-        var nameDiv = document.createElement('div');
-        nameDiv.innerText = display;
-        nameDiv.className = cellClass;
-        outerDiv.appendChild(nameDiv);
-
-        var countDiv = document.createElement('div');
-
-        var currentDiv = document.createElement('div');
-        currentDiv.id = 'current-' + thingName;
-
-        var updateCount = count => currentDiv.innerText = count.toString();
-        updateCount(count);
-        Inventory.Register('count', thingName, updateCount);
-        currentDiv.className = cellClass;
-        countDiv.appendChild(currentDiv);
-
-        if (capacity) {
-            var slashDiv = document.createElement('div');
-            slashDiv.innerText = '/';
-            slashDiv.className = cellClass;
-            countDiv.appendChild(slashDiv);
-
-            var capacityDiv = document.createElement('div');
-            capacityDiv.id = 'capacity-' + thingName;
-
-            var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
-            updateCapacity(capacity);
-            Inventory.Register('capacity', thingName, updateCapacity);
-            capacityDiv.className = cellClass;
-            countDiv.appendChild(capacityDiv);
-        }
-
-        countDiv.className = cellClass;
-        outerDiv.appendChild(countDiv);
+    definitions.forEach(thingType => {
+        var thingName = thingType.name;
 
         if (Inventory.IsRevealed(thingName)) {
-            var buttonDiv = createButton(thingName, cellClass);
-
-            outerDiv.appendChild(buttonDiv);
+            createThingRow(thingName);
         }
         else {
-            Inventory.Register('reveal', thingName, count => {
-                var buttonDiv = createButton(thingName, cellClass);
+            var create = () => {
+                createThingRow(thingName);
+                Inventory.Unregister('reveal', thingName, create);
+            }
 
-                outerDiv.appendChild(buttonDiv);
-            });
+            Inventory.Register('reveal', thingName, create);
         }
-
-        inventory.appendChild(outerDiv);
     });
 }
 
-function createButton(thingName: string, cellClass: string) {
+function createThingRow(thingName: string) {
+    var outerDiv = document.createElement('div');
+    outerDiv.className = 'row';
+
+    var toUnregister = [];
+    var unregisterMe = (callback: (count?: number) => void) => toUnregister.push(callback);
+
+    outerDiv.appendChild(createName(defByName[thingName].display));
+    outerDiv.appendChild(createCountDiv(thingName));
+    outerDiv.appendChild(createButton(thingName, unregisterMe));
+
+    var hideThingRow = () => {
+        outerDiv.parentElement.removeChild(outerDiv);
+        Inventory.Unregister('hide', thingName, hideThingRow);
+
+        toUnregister.forEach(unreg => Inventory.Unregister('count', thingName, unreg));
+    };
+    Inventory.Register('hide', thingName, hideThingRow);
+
+    document.getElementById('inventory').appendChild(outerDiv);
+}
+
+function createCountDiv(thingName: string) {
+    var countDiv = document.createElement('div');
+
+    var currentDiv = document.createElement('div');
+    currentDiv.id = 'current-' + thingName;
+
+    var updateCount = count => currentDiv.innerText = count.toString();
+    updateCount(Inventory.GetCount(thingName));
+    Inventory.Register('count', thingName, updateCount);
+    currentDiv.className = cellClass;
+    countDiv.appendChild(currentDiv);
+
+    var capacity = getCapacity(thingName);
+    if (capacity) {
+        var slashDiv = document.createElement('div');
+        slashDiv.innerText = '/';
+        slashDiv.className = cellClass;
+        countDiv.appendChild(slashDiv);
+
+        var capacityDiv = document.createElement('div');
+        capacityDiv.id = 'capacity-' + thingName;
+
+        var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
+        updateCapacity(capacity);
+        Inventory.Register('capacity', thingName, updateCapacity);
+        capacityDiv.className = cellClass;
+        countDiv.appendChild(capacityDiv);
+    }
+
+    countDiv.className = cellClass;
+    return countDiv;
+}
+
+function createName(display: string) {
+    var nameDiv = document.createElement('div');
+
+    nameDiv.innerText = display;
+    nameDiv.className = cellClass;
+
+    return nameDiv;
+}
+
+function createButton(thingName: string, unregisterMe: (callback: (count?: number) => void) => void) {
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
 
     var buyButton = document.createElement('button');
-    buyButton.id = 'buy-' + thingName;
+    var id = buyButton.id = 'buy-' + thingName;
 
-    var updateButton = count => buyButton.innerText = getButtonText(thingName);
-    updateButton(Inventory.GetCount(thingName));
+    var updateButton: (count?: number) => void = () => buyButton.innerText = getButtonText(thingName);
+    updateButton();
+
     Inventory.Register('count', thingName, updateButton);
+    unregisterMe(updateButton);
 
     buyButton.classList.add('btn');
     buyButton.classList.add('btn-primary');
     buyButton.addEventListener('click', function () { tryBuy(thingName); });
 
     buttonDiv.appendChild(buyButton);
-
-    var hideButton = () => {
-        buttonDiv.parentElement.removeChild(buttonDiv);
-        Inventory.Unregister('count', thingName, updateButton);
-    };
-    Inventory.Register('hide', thingName, hideButton);
 
     return buttonDiv;
 }
@@ -390,9 +401,6 @@ function getCapacity(thingName) {
                 baseCapacity = thingType.capacity;
         }
 
-        // capacityEffect: {
-        // 	'Cookie': 10,
-        // }
         var capacityEffect = thingType.capacityEffect;
         if (!capacityEffect) {
             return;
@@ -425,16 +433,13 @@ function tryBuy(thingToBuy) {
     Inventory.ChangeCount(thingToBuy, 1);
 
     save();
-    updateDiplay();
 }
 
 function resetEverything() {
     Inventory.Reset();
 
-    initializeStuff();
+    initializeSaveData();
     save();
-
-    updateDiplay();
 }
 
 function save() {
@@ -442,15 +447,22 @@ function save() {
     localStorage['SaveData'] = JSON.stringify(saveData);
 }
 
-function initializeStuff() {
+function initializeSaveData() {
+    if (!saveData) {
+        saveData = <SaveData>{};
+    }
+
     var stuff = saveData.Stuff;
     if (!stuff) {
         stuff = saveData.Stuff = {};
     }
 
-    definitions.forEach(function (thingDef) {
-        if (!stuff[thingDef.name]) {
-            stuff[thingDef.name] = { Count: 0 };
+    definitions.forEach(function (thingType) {
+        if (!stuff[thingType.name]) {
+            stuff[thingType.name] = {
+                Count: 0,
+                IsRevealed: false,
+            };
         }
     });
 }
@@ -466,7 +478,6 @@ function onInterval() {
         }
     });
 
-    updateDiplay();
     save();
 }
 
@@ -476,12 +487,11 @@ function onLoad() {
     }
     catch (e) { }
 
+    initializeSaveData();
     Inventory.Initialize();
-
-    initializeStuff();
+    
     createInventory();
 
-    updateDiplay();
     setInterval(onInterval, 200);
 }
 

@@ -74,6 +74,112 @@ var definitions = <ThingType[]>[
 var defByName: { [index: string]: ThingType } = {};
 definitions.forEach(thingType => defByName[thingType.name] = thingType);
 
+module Inventory {
+    export function GetCount(thingName: string) {
+        return saveData.Stuff[thingName].Count;
+    }
+
+    export function ChangeCount(thingName: string, delta: number) {
+        var initialCount = saveData.Stuff[thingName].Count;
+        var capacity = getCapacity(thingName);
+        var count = saveData.Stuff[thingName].Count += delta;
+
+        if (capacity !== 0 && count > capacity) {
+            count = saveData.Stuff[thingName].Count = capacity;
+        }
+        else if (count < 0) {
+            count = saveData.Stuff[thingName].Count = 0;
+        }
+
+        // send notification
+        if (count === initialCount) {
+            return count;
+        }
+
+        fireCallback('count', thingName, count);
+
+        return count;
+    }
+
+    export function SetCount(thingName: string, count: number) {
+        if (saveData.Stuff[thingName].Count === count) {
+            return count;
+        }
+
+        saveData.Stuff[thingName].Count = count;
+
+        fireCallback('count', thingName, count);
+
+        return count;
+    }
+
+    export function SetReveal(thingName: string, revealed: boolean) {
+        saveData.Stuff[thingName].IsRevealed = revealed;
+    }
+
+    export function IsRevealed(thingName: string) {
+        return saveData.Stuff[thingName].IsRevealed;
+    }
+
+    export function Reset() {
+        definitions.forEach(thingType => {
+            var thingName = thingType.name;
+
+            SetCount(thingName, 0);
+            SetReveal(thingName, false);
+        });
+    }
+
+    function fireCallback(eventName: string, thingName: string, count: number) {
+        var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName];
+        if (!thingNameToCallbacks) {
+            return;
+        }
+
+        var callbacks = thingNameToCallbacks[thingName];
+        if (callbacks) {
+            callbacks.forEach(callback => callback(thingName, count));
+        }
+    }
+
+    export function Register(eventName: string, thingName: string, callback: (thingName: string, count: number) => void) {
+        var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName]
+        if (!thingNameToCallbacks) {
+            thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName] = {};
+        }
+
+        var callbacks = thingNameToCallbacks[thingName];
+        if (!callbacks) {
+            callbacks = thingNameToCallbacks[thingName] = [];
+        }
+
+        callbacks.push(callback);
+    }
+
+    export function Unregister(eventName: string, thingName: string, callback: (thingName: string, count: number) => void) {
+        var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName];
+        if (!thingNameToCallbacks) {
+            return false;
+        }
+
+        var callbacks = thingNameToCallbacks[thingName];
+        if (callbacks) {
+            return false;
+        }
+
+        var index = callbacks.indexOf(callback);
+
+        if (index === -1) {
+            return false;
+        }
+
+        callbacks.splice(index, 1);
+        return true;
+    }
+
+    var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (thingName: string, count: number): void }[] } } = {};
+}
+
 function updateDiplay() {
     updateButtons();
     updateInventory();
@@ -92,10 +198,10 @@ function updateButtons() {
         var cost = new PurchaseCost(thingName);
 
         if (cost.CanAfford()) {
-            saveData.Stuff[thingName].IsRevealed = true;
+            Inventory.SetReveal(thingName, true);
         }
 
-        if (!saveData.Stuff[thingName].IsRevealed) {
+        if (!Inventory.IsRevealed(thingName)) {
             button.style.visibility = 'hidden';
             return;
         }
@@ -108,7 +214,7 @@ function updateButtons() {
 
         if (!costString) {
             costString = "FREE!";
-            saveData.Stuff[thingName].IsRevealed = true;
+            Inventory.SetReveal(thingName, true);
         }
 
         button.innerText = 'Buy a ' + display + ' for ' + costString;
@@ -119,11 +225,11 @@ function updateInventory() {
     definitions.forEach(thingDef => {
         var thingName = thingDef.name;
 
-        var currentDiv = document.getElementById('current-' + thingName);
-        var count = saveData.Stuff[thingName].Count;
-        if (currentDiv) {
-            currentDiv.innerText = count.toString();
-        }
+        //var currentDiv = document.getElementById('current-' + thingName);
+        //var count = Inventory.GetCount(thingName);
+        //if (currentDiv) {
+        //    currentDiv.innerText = count.toString();
+        //}
 
         var capacityDiv = document.getElementById('capacity-' + thingName);
         var capacity = getCapacity(thingName);
@@ -138,17 +244,15 @@ function createInventory() {
 
     var cellClass = 'col-sm-2';
 
-    definitions.forEach(function (thingDef) {
+    definitions.forEach(thingDef => {
         var thingName = thingDef.name;
 
-        var count = saveData.Stuff[thingName].Count;
+        var count = Inventory.GetCount(thingName);
         var capacity = getCapacity(thingName);
         var display = thingDef.display;
 
         var outerDiv = document.createElement('div');
         outerDiv.classList.add('row');
-        //outerDiv.classList.add('panel');
-        //outerDiv.classList.add('panel-default');
 
         var nameDiv = document.createElement('div');
         nameDiv.innerText = display;
@@ -159,7 +263,12 @@ function createInventory() {
 
         var currentDiv = document.createElement('div');
         currentDiv.id = 'current-' + thingName;
-        currentDiv.innerText = count.toString();
+
+        var updateCount = (name, count) => {
+            currentDiv.innerText = count.toString();
+        };
+        updateCount(thingName, count);
+        Inventory.Register('count', thingName, updateCount);
         currentDiv.className = cellClass;
         countDiv.appendChild(currentDiv);
 
@@ -208,12 +317,12 @@ class PurchaseCost {
     }
 
     public CanAfford() {
-        return this.GetThingNames().every(thingName => saveData.Stuff[thingName].Count >= this.GetCost(thingName));
+        return this.GetThingNames().every(thingName => Inventory.GetCount(thingName) >= this.GetCost(thingName));
     }
 
     public Deduct() {
         this.GetThingNames().forEach(thingName => {
-            saveData.Stuff[thingName].Count -= this.GetCost(thingName);
+            Inventory.ChangeCount(thingName, -this.GetCost(thingName));
         });
     }
 
@@ -227,7 +336,7 @@ class PurchaseCost {
         if (!cost)
             return 0;
 
-        return Math.floor(cost * Math.pow(1.15, saveData.Stuff[this.ThingToBuy].Count));
+        return Math.floor(cost * Math.pow(1.15, Inventory.GetCount(this.ThingToBuy)));
     }
 }
 
@@ -251,7 +360,7 @@ function getCapacity(thingName) {
         }
 
         var effect = thingType.capacityEffect[thingName];
-        var count = saveData.Stuff[thingType.name].Count;
+        var count = Inventory.GetCount(thingType.name);
         if (effect && count) {
             capacityDelta += effect * count;
         }
@@ -269,19 +378,20 @@ function tryBuy(thingToBuy) {
     }
 
     var capacity = getCapacity(thingToBuy);
-    if (capacity && getCapacity(thingToBuy) <= saveData.Stuff[thingToBuy].Count) {
+    if (capacity && capacity <= Inventory.GetCount(thingToBuy)) {
         return;
     }
 
     cost.Deduct();
-    saveData.Stuff[thingToBuy].Count++;
+    Inventory.ChangeCount(thingToBuy, 1);
 
     save();
     updateDiplay();
 }
 
 function resetEverything() {
-    saveData.Stuff = {};
+    Inventory.Reset();
+
     initializeStuff();
     save();
 
@@ -309,14 +419,11 @@ function initializeStuff() {
 function onInterval() {
     definitions.forEach(function (typeDef) {
         var income = typeDef.income;
-        var count = saveData.Stuff[typeDef.name].Count;
+        var count = Inventory.GetCount(typeDef.name);
         if (income && count) {
-            Object.keys(income).forEach(earnedName => saveData.Stuff[earnedName].Count += income[earnedName] * count);
-
-            var capacity = getCapacity('Cookie');
-            if (capacity !== 0 && saveData.Stuff['Cookie'].Count > capacity) {
-                saveData.Stuff['Cookie'].Count = capacity;
-            }
+            Object.keys(income).forEach(earnedName => {
+                Inventory.ChangeCount(earnedName, income[earnedName] * count);
+            });
         }
     });
 
@@ -324,16 +431,18 @@ function onInterval() {
     save();
 }
 
-// i think i need something that will fire when the page finished loading
-window.onload = () => {
+function onLoad() {
     try {
         saveData = JSON.parse(localStorage['SaveData']);
     }
-    catch (e) {}
-    
+    catch (e) { }
+
     initializeStuff();
     createInventory();
 
     updateDiplay();
     setInterval(onInterval, 200);
-};
+}
+
+// i think i need something that will fire when the page finished loading
+window.onload = onLoad;

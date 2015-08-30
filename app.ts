@@ -212,12 +212,7 @@ module Inventory {
 
         saveData.Stuff[thingName].IsRevealed = revealed;
 
-        if (revealed) {
-            fireCallback(InvEvent.Reveal, thingName, 0);
-        }
-        else {
-            fireCallback(InvEvent.Hide, thingName, 0);
-        }
+        fireRevealEvent(thingName, revealed);
     }
 
     export function IsRevealed(thingName: string) {
@@ -259,13 +254,7 @@ module Inventory {
         }
 
         saveData.Stuff[thingName].IsCapShown = shown;
-
-        if (shown) {
-            fireCallback(InvEvent.ShowCap, thingName, 0);
-        }
-        else {
-            fireCallback(InvEvent.HideCap, thingName, 0);
-        }
+        fireShowCapacityEvent(thingName, shown);
     }
 
     export function IsCapacityShown(thingName: string) {
@@ -348,7 +337,7 @@ module Inventory {
     // event callback interfaces
     interface CountCallback { (count: number, previous: number): void; };
     interface CapacityCallback { (capacity: number): void; };
-    interface EnableCallback { (enabled: boolean): void; };
+    interface ToggleCallback { (toggled: boolean): void; };
 
     // Count events
     var countEvents: { [thingName: string]: Events.GameEvent<CountCallback> } = {};
@@ -369,12 +358,30 @@ module Inventory {
     }
 
     // Enable events (enabling and disabling buy buttons)
-    var enableEvents: { [thingName: string]: Events.GameEvent<EnableCallback> } = {};
-    export function GetEnableEvent(thingName: string): Events.IGameEvent<EnableCallback> {
+    var enableEvents: { [thingName: string]: Events.GameEvent<ToggleCallback> } = {};
+    export function GetEnableEvent(thingName: string): Events.IGameEvent<ToggleCallback> {
         return getThingEvent(thingName, enableEvents);
     }
     function fireEnableEvent(thingName: string, enabled: boolean) {
         fireThingEvent(thingName, enableEvents, callback => callback(enabled));
+    }
+
+    // Reveal and hide events (for showing that a thing exists at all)
+    var revealEvents: { [thingName: string]: Events.GameEvent<ToggleCallback> } = {};
+    export function GetRevealEvent(thingName: string): Events.IGameEvent<ToggleCallback> {
+        return getThingEvent(thingName, revealEvents);
+    }
+    function fireRevealEvent(thingName: string, enabled: boolean) {
+        fireThingEvent(thingName, revealEvents, callback => callback(enabled));
+    }
+
+    // Show and hide capacity events
+    var showCapacityEvents: { [thingName: string]: Events.GameEvent<ToggleCallback> } = {};
+    export function GetShowCapacityEvent(thingName: string): Events.IGameEvent<ToggleCallback> {
+        return getThingEvent(thingName, showCapacityEvents);
+    }
+    function fireShowCapacityEvent(thingName: string, enabled: boolean) {
+        fireThingEvent(thingName, showCapacityEvents, callback => callback(enabled));
     }
 
     function fireThingEvent<T>(
@@ -437,16 +444,6 @@ module Events {
     }
 }
 
-module InvEvent {
-    // controls visibility of things
-    export var Reveal = 'reveal';
-    export var Hide = 'hide';
-
-    // thing capacity visibility
-    export var ShowCap = 'showcap';
-    export var HideCap = 'hidecap';
-}
-
 function getButtonText(thingName) {
     var thingType = defByName[thingName];
 
@@ -470,10 +467,13 @@ function createInventory() {
             createThingRow(thingName);
         }
 
-        var create = () => {
-            createThingRow(thingName);
+        var create = (reveal: boolean) => {
+            if (reveal) {
+                createThingRow(thingName);
+            }
         }
-        Inventory.Register(InvEvent.Reveal, thingName, create);
+
+        Inventory.GetRevealEvent(thingName).Register(create);
     });
 }
 
@@ -488,14 +488,17 @@ function createThingRow(thingName: string) {
     outerDiv.appendChild(createCountDiv(thingName));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
 
-    var hideThingRow = () => {
-        outerDiv.parentElement.removeChild(outerDiv);
-        Inventory.Unregister(InvEvent.Hide, thingName, hideThingRow);
+    var hideThingRow = (revealed: boolean) => {
+        if (revealed) {
+            return;
+        }
 
-        //Inventory.Unregister(unreg[0], thingName, unreg[1])
+        outerDiv.parentElement.removeChild(outerDiv);
+        Inventory.GetRevealEvent(thingName).Unregister(hideThingRow);
+
         toUnregister.forEach(unreg => unreg());
     };
-    Inventory.Register(InvEvent.Hide, thingName, hideThingRow);
+    Inventory.GetRevealEvent(thingName).Register(hideThingRow);
 
     document.getElementById('inventory').appendChild(outerDiv);
 }
@@ -522,11 +525,15 @@ function createCountDiv(thingName: string) {
         createCapacity(thingName, countDiv);
     }
     else {
-        var callback = count => {
+        var callback = (show: boolean) => {
+            if (!show) {
+                return;
+            }
+
             createCapacity(thingName, countDiv);
-            Inventory.Unregister(InvEvent.ShowCap, thingName, callback);
+            Inventory.GetShowCapacityEvent(thingName).Unregister(callback);
         }
-        Inventory.Register(InvEvent.ShowCap, thingName, callback);
+        Inventory.GetShowCapacityEvent(thingName).Register(callback);
     }
 
     countDiv.className = cellClass;
@@ -625,8 +632,6 @@ class PurchaseCost {
         return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.ThingToBuy)));
     }
 }
-
-
 
 function tryBuy(thingToBuy) {
     var cost = new PurchaseCost(thingToBuy);

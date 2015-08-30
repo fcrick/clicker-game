@@ -156,12 +156,7 @@ var Inventory;
             return;
         }
         saveData.Stuff[thingName].IsRevealed = revealed;
-        if (revealed) {
-            fireCallback(InvEvent.Reveal, thingName, 0);
-        }
-        else {
-            fireCallback(InvEvent.Hide, thingName, 0);
-        }
+        fireRevealEvent(thingName, revealed);
     }
     Inventory.SetReveal = SetReveal;
     function IsRevealed(thingName) {
@@ -197,12 +192,7 @@ var Inventory;
             return;
         }
         saveData.Stuff[thingName].IsCapShown = shown;
-        if (shown) {
-            fireCallback(InvEvent.ShowCap, thingName, 0);
-        }
-        else {
-            fireCallback(InvEvent.HideCap, thingName, 0);
-        }
+        fireShowCapacityEvent(thingName, shown);
     }
     Inventory.SetCapacityShown = SetCapacityShown;
     function IsCapacityShown(thingName) {
@@ -302,6 +292,24 @@ var Inventory;
     function fireEnableEvent(thingName, enabled) {
         fireThingEvent(thingName, enableEvents, function (callback) { return callback(enabled); });
     }
+    // Reveal and hide events (for showing that a thing exists at all)
+    var revealEvents = {};
+    function GetRevealEvent(thingName) {
+        return getThingEvent(thingName, revealEvents);
+    }
+    Inventory.GetRevealEvent = GetRevealEvent;
+    function fireRevealEvent(thingName, enabled) {
+        fireThingEvent(thingName, revealEvents, function (callback) { return callback(enabled); });
+    }
+    // Show and hide capacity events
+    var showCapacityEvents = {};
+    function GetShowCapacityEvent(thingName) {
+        return getThingEvent(thingName, showCapacityEvents);
+    }
+    Inventory.GetShowCapacityEvent = GetShowCapacityEvent;
+    function fireShowCapacityEvent(thingName, enabled) {
+        fireThingEvent(thingName, showCapacityEvents, function (callback) { return callback(enabled); });
+    }
     function fireThingEvent(thingName, eventTable, caller) {
         var event = eventTable[thingName];
         if (!event) {
@@ -343,15 +351,6 @@ var Events;
     })();
     Events.GameEvent = GameEvent;
 })(Events || (Events = {}));
-var InvEvent;
-(function (InvEvent) {
-    // controls visibility of things
-    InvEvent.Reveal = 'reveal';
-    InvEvent.Hide = 'hide';
-    // thing capacity visibility
-    InvEvent.ShowCap = 'showcap';
-    InvEvent.HideCap = 'hidecap';
-})(InvEvent || (InvEvent = {}));
 function getButtonText(thingName) {
     var thingType = defByName[thingName];
     var cost = new PurchaseCost(thingName);
@@ -368,10 +367,12 @@ function createInventory() {
         if (Inventory.IsRevealed(thingName)) {
             createThingRow(thingName);
         }
-        var create = function () {
-            createThingRow(thingName);
+        var create = function (reveal) {
+            if (reveal) {
+                createThingRow(thingName);
+            }
         };
-        Inventory.Register(InvEvent.Reveal, thingName, create);
+        Inventory.GetRevealEvent(thingName).Register(create);
     });
 }
 function createThingRow(thingName) {
@@ -382,13 +383,15 @@ function createThingRow(thingName) {
     outerDiv.appendChild(createName(defByName[thingName].display));
     outerDiv.appendChild(createCountDiv(thingName));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
-    var hideThingRow = function () {
+    var hideThingRow = function (revealed) {
+        if (revealed) {
+            return;
+        }
         outerDiv.parentElement.removeChild(outerDiv);
-        Inventory.Unregister(InvEvent.Hide, thingName, hideThingRow);
-        //Inventory.Unregister(unreg[0], thingName, unreg[1])
+        Inventory.GetRevealEvent(thingName).Unregister(hideThingRow);
         toUnregister.forEach(function (unreg) { return unreg(); });
     };
-    Inventory.Register(InvEvent.Hide, thingName, hideThingRow);
+    Inventory.GetRevealEvent(thingName).Register(hideThingRow);
     document.getElementById('inventory').appendChild(outerDiv);
 }
 function createCountDiv(thingName) {
@@ -407,11 +410,14 @@ function createCountDiv(thingName) {
         createCapacity(thingName, countDiv);
     }
     else {
-        var callback = function (count) {
+        var callback = function (show) {
+            if (!show) {
+                return;
+            }
             createCapacity(thingName, countDiv);
-            Inventory.Unregister(InvEvent.ShowCap, thingName, callback);
+            Inventory.GetShowCapacityEvent(thingName).Unregister(callback);
         };
-        Inventory.Register(InvEvent.ShowCap, thingName, callback);
+        Inventory.GetShowCapacityEvent(thingName).Register(callback);
     }
     countDiv.className = cellClass;
     return countDiv;

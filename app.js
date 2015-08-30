@@ -99,7 +99,7 @@ var Inventory;
                 if (effect) {
                     var callback = function (count) {
                         var capacity = Inventory.GetCapacity(affectedName);
-                        fireCallback(InvEvent.Capacity, affectedName, capacity);
+                        fireCapacityEvent(affectedName, capacity);
                     };
                     GetCountEvent(thingName).Register(callback);
                 }
@@ -278,17 +278,31 @@ var Inventory;
     }
     Inventory.Unregister = Unregister;
     ;
+    ;
+    // Count events
     var countEvents = {};
     function GetCountEvent(thingName) {
         return getThingEvent(thingName, countEvents);
     }
     Inventory.GetCountEvent = GetCountEvent;
     function fireCountEvent(thingName, count, previous) {
-        var event = countEvents[thingName];
+        fireThingEvent(thingName, countEvents, function (callback) { return callback(count, previous); });
+    }
+    // Capacity events
+    var capacityEvents = {};
+    function GetCapacityEvent(thingName) {
+        return getThingEvent(thingName, capacityEvents);
+    }
+    Inventory.GetCapacityEvent = GetCapacityEvent;
+    function fireCapacityEvent(thingName, capacity) {
+        fireThingEvent(thingName, capacityEvents, function (callback) { return callback(capacity); });
+    }
+    function fireThingEvent(thingName, eventTable, caller) {
+        var event = eventTable[thingName];
         if (!event) {
             return;
         }
-        event.Fire(function (callback) { return callback(count, previous); });
+        event.Fire(caller);
     }
     function getThingEvent(thingName, eventTable) {
         var event = eventTable[thingName];
@@ -326,7 +340,6 @@ var Events;
 })(Events || (Events = {}));
 var InvEvent;
 (function (InvEvent) {
-    InvEvent.Capacity = 'capacity';
     // controls whether buy buttons are enabled
     InvEvent.Enable = 'enable';
     InvEvent.Disable = 'disable';
@@ -409,7 +422,8 @@ function createCapacity(thingName, countDiv) {
     capacityDiv.id = 'capacity-' + thingName;
     var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
     updateCapacity(Inventory.GetCapacity(thingName));
-    Inventory.Register(InvEvent.Capacity, thingName, updateCapacity);
+    // TODO: unregister
+    Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
     capacityDiv.className = cellClass;
     [slashDiv, capacityDiv].forEach(function (div) { return countDiv.appendChild(div); });
 }

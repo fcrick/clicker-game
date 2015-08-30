@@ -144,7 +144,7 @@ module Inventory {
                 if (effect) {
                     var callback = (count) => {
                         var capacity = Inventory.GetCapacity(affectedName);
-                        fireCallback(InvEvent.Capacity, affectedName, capacity);
+                        fireCapacityEvent(affectedName, capacity);
                     };
                     GetCountEvent(thingName).Register(callback);
                 }
@@ -351,19 +351,39 @@ module Inventory {
         return true;
     }
 
+    // event callback interfaces
     interface CountCallback { (count: number, previous: number): void; };
+    interface CapacityCallback { (capacity: number): void; };
+
+    // Count events
     var countEvents: { [thingName: string]: Events.GameEvent<CountCallback> } = {};
     export function GetCountEvent(thingName: string): Events.IGameEvent<CountCallback> {
         return getThingEvent(thingName, countEvents);
     }
-
     function fireCountEvent(thingName: string, count: number, previous: number) {
-        var event = countEvents[thingName];
+        fireThingEvent(thingName, countEvents, callback => callback(count, previous));
+    }
+
+    // Capacity events
+    var capacityEvents: { [thingName: string]: Events.GameEvent<CapacityCallback> } = {};
+    export function GetCapacityEvent(thingName: string): Events.IGameEvent<CapacityCallback> {
+        return getThingEvent(thingName, capacityEvents);
+    }
+    function fireCapacityEvent(thingName: string, capacity: number) {
+        fireThingEvent(thingName, capacityEvents, callback => callback(capacity));
+    }
+
+    function fireThingEvent<T>(
+        thingName: string,
+        eventTable: { [index: string]: Events.GameEvent<T> },
+        caller: (callback: T) => void
+    ) {
+        var event = eventTable[thingName];
         if (!event) {
             return;
         }
 
-        event.Fire(callback => callback(count, previous));
+        event.Fire(caller);
     }
 
     function getThingEvent<T>(
@@ -414,8 +434,6 @@ module Events {
 }
 
 module InvEvent {
-    export var Capacity = 'capacity';
-
     // controls whether buy buttons are enabled
     export var Enable = 'enable';
     export var Disable = 'disable';
@@ -525,7 +543,8 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement) {
 
     var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
     updateCapacity(Inventory.GetCapacity(thingName));
-    Inventory.Register(InvEvent.Capacity, thingName, updateCapacity);
+    // TODO: unregister
+    Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
     capacityDiv.className = cellClass;
 
     [slashDiv, capacityDiv].forEach(div => countDiv.appendChild(div));

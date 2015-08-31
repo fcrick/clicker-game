@@ -19,6 +19,8 @@ resetButton.addEventListener('click', resetEverything, false);
 // - fix the numeric display so it looks fine with larger numbers
 // - fractional income support
 // - progress bars for Keg Delivery Guy progress
+// - make 0 no longer mean unlimited capacity
+// - enforce display ordering so reloading the page doesn't change the order
 
 interface SaveThingInfo {
     Count: number;
@@ -36,7 +38,7 @@ interface ThingType {
     name: string;
     display?: string; // things without display are never shown
     cost?: { [index: string]: number };
-    capacity?: number;
+    capacity: number;
     income?: { [index: string]: number };
     capacityEffect?: { [index: string]: number };
     costRatio?: number;
@@ -53,6 +55,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-Scorer1',
         display: 'Delivery Guy',
+        capacity: -1,
         cost: {
             'tt-Point': 10,
         },
@@ -63,6 +66,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-Scorer2',
         display: 'Microbrewery',
+        capacity: -1,
         cost: {
             'tt-FixedPrice1': 25,
         },
@@ -71,8 +75,20 @@ var definitions = <ThingType[]>[
         },
     },
     {
+        name: 'tt-Scorer3',
+        display: 'Taxi Driver',
+        capacity: 0,
+        cost: {
+            'tt-Point': 100,
+        },
+        income: {
+            'tt-FractionOfFixedPrice1': 10,
+        }
+    },
+    {
         name: 'tt-PointHolder1',
         display: 'Keg',
+        capacity: -1,
         cost: {
             'tt-Point': 25,
         },
@@ -84,16 +100,19 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-PointHolder2',
         display: 'Garage',
+        capacity: -1,
         cost: {
             'tt-FixedPrice1': 10,
         },
+        costRatio: 1.4,
         capacityEffect: {
-            'tt-Point': 25,
+            'tt-Scorer3': 2,
         }
     },
     {
         name: 'tt-PointHolder3',
         display: 'Swimming Pool',
+        capacity: -1,
         cost: {
             'tt-Point': 400,
         },
@@ -102,10 +121,24 @@ var definitions = <ThingType[]>[
         }
     },
     {
+        name: 'tt-PointHolder4',
+        display: 'Piggy Bank',
+        capacity: -1,
+        cost: {
+            'tt-Point': 4000,
+        },
+        capacityEffect: {
+            'tt-FixedPrice1': 100,
+        }
+    },
+    {
         name: 'tt-FixedPrice1',
         display: 'Benjamin',
         cost: {
             'tt-Point': 250,
+        },
+        capacityEffect: {
+            'tt-FractionOfFixedPrice1': 4,
         },
         capacity: 100,
         costRatio: 1,
@@ -113,6 +146,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-PointHolderMaker1',
         display: 'Keg Delivery Guy',
+        capacity: -1,
         cost: {
             'tt-FixedPrice1': 5,
         },
@@ -126,6 +160,14 @@ var definitions = <ThingType[]>[
         zeroAtCapacity: true,
         incomeWhenZeroed: {
             'tt-PointHolder1': 1,
+        }
+    },
+    {
+        name: 'tt-FractionOfFixedPrice1',
+        capacity: 50,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-FixedPrice1': 1,
         }
     },
 ];
@@ -146,16 +188,16 @@ module Inventory {
             }
 
             var purchaseCost = new PurchaseCost(thingType.name);
-            var callback = () => {
+            var callback = c => {
                 var capacity = GetCapacity(thingName);
                 var canAfford = purchaseCost.CanAfford();
                 var count = GetCount(thingName);
 
-                if (count && count > 0 || canAfford) {
+                if (capacity !== 0 && (count > 0 || canAfford)) {
                     SetReveal(thingName, true);
                 }
 
-                if (canAfford && (!capacity || count < capacity)) {
+                if (canAfford && (capacity === -1 || count < capacity)) {
                     SetEnabled(thingName, true);
                 }
                 else {
@@ -172,7 +214,7 @@ module Inventory {
             callback(GetCount(thingName));
 
             var capacity = GetCapacity(thingName);
-            if (capacity && GetCount(thingName) >= capacity) {
+            if (capacity !== -1 && GetCount(thingName) >= capacity) {
                 SetCapacityShown(thingName, true);
             }
 
@@ -202,7 +244,7 @@ module Inventory {
         var capacity = Inventory.GetCapacity(thingName);
         var count = saveData.Stuff[thingName].Count += delta;
 
-        if (capacity !== 0 && count > capacity) {
+        if (capacity !== -1 && count > capacity) {
             count = saveData.Stuff[thingName].Count = capacity;
         }
         else if (count < 0) {
@@ -247,7 +289,7 @@ module Inventory {
             return;
         }
 
-        if (capacity && count >= capacity) {
+        if (capacity !== -1 && count >= capacity) {
             SetCapacityShown(thingName, true);
         }
     }
@@ -281,9 +323,11 @@ module Inventory {
         var thingType = defByName[thingName]
 
         var capacity = thingType.capacity
-        if (capacity) {
-            baseCapacity = thingType.capacity;
+        if (capacity === -1) {
+            return -1;
         }
+
+        baseCapacity = thingType.capacity;
 
         // TODO: make not wasteful
         definitions.forEach(thingType => {
@@ -619,7 +663,7 @@ function tryBuy(thingToBuy) {
     }
 
     var capacity = Inventory.GetCapacity(thingToBuy);
-    if (capacity && capacity <= Inventory.GetCount(thingToBuy)) {
+    if (capacity !== -1 && Inventory.GetCount(thingToBuy) >= capacity) {
         return;
     }
 

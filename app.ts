@@ -16,7 +16,6 @@ resetButton.addEventListener('click', resetEverything, false);
 // - work on simulating the game so I know how long things take
 // - auto-generating game definitions
 // - fix capacity not turning off as it should when the game is reset
-// - make buttons disabled if you can't buy because you're at your capacity
 // - fix the numeric display so it looks fine with larger numbers
 // - fractional income support
 // - progress bars for Keg Delivery Guy progress
@@ -140,29 +139,37 @@ module Inventory {
         definitions.forEach(thingType => {
             var thingName = thingType.name;
             var cost = thingType.cost;
+            var count = GetCount(thingName);
 
-            if (!cost) {
+            if (!cost || count > 0) {
                 SetReveal(thingName, true);
             }
-            else {
-                var purchaseCost = new PurchaseCost(thingType.name);
-                var callback = count => {
-                    if (purchaseCost.CanAfford()) {
-                        SetReveal(thingName, true);
-                        SetEnabled(thingName, true);
-                    }
-                    else {
-                        SetEnabled(thingName, false);
-                    }
-                    // add button disable
+
+            var purchaseCost = new PurchaseCost(thingType.name);
+            var callback = () => {
+                var capacity = GetCapacity(thingName);
+                var canAfford = purchaseCost.CanAfford();
+                var count = GetCount(thingName);
+
+                if (count && count > 0 || canAfford) {
+                    SetReveal(thingName, true);
                 }
 
-                purchaseCost.GetThingNames().forEach(needed => {
-                    GetCountEvent(needed).Register(callback);
-                });
-
-                callback(GetCount(thingName));
+                if (canAfford && (!capacity || count < capacity)) {
+                    SetEnabled(thingName, true);
+                }
+                else {
+                    SetEnabled(thingName, false);
+                }
             }
+
+            purchaseCost.GetThingNames().forEach(needed => {
+                GetCountEvent(needed).Register(callback);
+            });
+
+            GetCountEvent(thingName).Register(callback);
+
+            callback(GetCount(thingName));
 
             var capacity = GetCapacity(thingName);
             if (capacity && GetCount(thingName) >= capacity) {

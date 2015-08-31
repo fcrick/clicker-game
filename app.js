@@ -96,26 +96,30 @@ var Inventory;
         definitions.forEach(function (thingType) {
             var thingName = thingType.name;
             var cost = thingType.cost;
-            if (!cost) {
+            var count = GetCount(thingName);
+            if (!cost || count > 0) {
                 SetReveal(thingName, true);
             }
-            else {
-                var purchaseCost = new PurchaseCost(thingType.name);
-                var callback = function (count) {
-                    if (purchaseCost.CanAfford()) {
-                        SetReveal(thingName, true);
-                        SetEnabled(thingName, true);
-                    }
-                    else {
-                        SetEnabled(thingName, false);
-                    }
-                    // add button disable
-                };
-                purchaseCost.GetThingNames().forEach(function (needed) {
-                    Inventory.GetCountEvent(needed).Register(callback);
-                });
-                callback(GetCount(thingName));
-            }
+            var purchaseCost = new PurchaseCost(thingType.name);
+            var callback = function () {
+                var capacity = GetCapacity(thingName);
+                var canAfford = purchaseCost.CanAfford();
+                var count = GetCount(thingName);
+                if (count && count > 0 || canAfford) {
+                    SetReveal(thingName, true);
+                }
+                if (canAfford && (!capacity || count < capacity)) {
+                    SetEnabled(thingName, true);
+                }
+                else {
+                    SetEnabled(thingName, false);
+                }
+            };
+            purchaseCost.GetThingNames().forEach(function (needed) {
+                Inventory.GetCountEvent(needed).Register(callback);
+            });
+            Inventory.GetCountEvent(thingName).Register(callback);
+            callback(GetCount(thingName));
             var capacity = GetCapacity(thingName);
             if (capacity && GetCount(thingName) >= capacity) {
                 SetCapacityShown(thingName, true);

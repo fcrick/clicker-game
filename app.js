@@ -12,6 +12,7 @@ var definitions = [
     {
         name: 'tt-Scorer1',
         display: 'Delivery Guy',
+        capacity: -1,
         cost: {
             'tt-Point': 10,
         },
@@ -22,6 +23,7 @@ var definitions = [
     {
         name: 'tt-Scorer2',
         display: 'Microbrewery',
+        capacity: -1,
         cost: {
             'tt-FixedPrice1': 25,
         },
@@ -30,8 +32,20 @@ var definitions = [
         },
     },
     {
+        name: 'tt-Scorer3',
+        display: 'Taxi Driver',
+        capacity: 0,
+        cost: {
+            'tt-Point': 100,
+        },
+        income: {
+            'tt-FractionOfFixedPrice1': 10,
+        }
+    },
+    {
         name: 'tt-PointHolder1',
         display: 'Keg',
+        capacity: -1,
         cost: {
             'tt-Point': 25,
         },
@@ -43,16 +57,19 @@ var definitions = [
     {
         name: 'tt-PointHolder2',
         display: 'Garage',
+        capacity: -1,
         cost: {
             'tt-FixedPrice1': 10,
         },
+        costRatio: 1.4,
         capacityEffect: {
-            'tt-Point': 25,
+            'tt-Scorer3': 2,
         }
     },
     {
         name: 'tt-PointHolder3',
         display: 'Swimming Pool',
+        capacity: -1,
         cost: {
             'tt-Point': 400,
         },
@@ -61,10 +78,24 @@ var definitions = [
         }
     },
     {
+        name: 'tt-PointHolder4',
+        display: 'Piggy Bank',
+        capacity: -1,
+        cost: {
+            'tt-Point': 4000,
+        },
+        capacityEffect: {
+            'tt-FixedPrice1': 100,
+        }
+    },
+    {
         name: 'tt-FixedPrice1',
         display: 'Benjamin',
         cost: {
             'tt-Point': 250,
+        },
+        capacityEffect: {
+            'tt-FractionOfFixedPrice1': 4,
         },
         capacity: 100,
         costRatio: 1,
@@ -72,6 +103,7 @@ var definitions = [
     {
         name: 'tt-PointHolderMaker1',
         display: 'Keg Delivery Guy',
+        capacity: -1,
         cost: {
             'tt-FixedPrice1': 5,
         },
@@ -87,6 +119,14 @@ var definitions = [
             'tt-PointHolder1': 1,
         }
     },
+    {
+        name: 'tt-FractionOfFixedPrice1',
+        capacity: 50,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-FixedPrice1': 1,
+        }
+    },
 ];
 var defByName = {};
 definitions.forEach(function (thingType) { return defByName[thingType.name] = thingType; });
@@ -96,28 +136,32 @@ var Inventory;
         definitions.forEach(function (thingType) {
             var thingName = thingType.name;
             var cost = thingType.cost;
-            if (!cost) {
+            var count = GetCount(thingName);
+            if (!cost || count > 0) {
                 SetReveal(thingName, true);
             }
-            else {
-                var purchaseCost = new PurchaseCost(thingType.name);
-                var callback = function (count) {
-                    if (purchaseCost.CanAfford()) {
-                        SetReveal(thingName, true);
-                        SetEnabled(thingName, true);
-                    }
-                    else {
-                        SetEnabled(thingName, false);
-                    }
-                    // add button disable
-                };
-                purchaseCost.GetThingNames().forEach(function (needed) {
-                    Inventory.GetCountEvent(needed).Register(callback);
-                });
-                callback(GetCount(thingName));
-            }
+            var purchaseCost = new PurchaseCost(thingType.name);
+            var callback = function (c) {
+                var capacity = GetCapacity(thingName);
+                var canAfford = purchaseCost.CanAfford();
+                var count = GetCount(thingName);
+                if (capacity !== 0 && (count > 0 || canAfford)) {
+                    SetReveal(thingName, true);
+                }
+                if (canAfford && (capacity === -1 || count < capacity)) {
+                    SetEnabled(thingName, true);
+                }
+                else {
+                    SetEnabled(thingName, false);
+                }
+            };
+            purchaseCost.GetThingNames().forEach(function (needed) {
+                Inventory.GetCountEvent(needed).Register(callback);
+            });
+            Inventory.GetCountEvent(thingName).Register(callback);
+            callback(GetCount(thingName));
             var capacity = GetCapacity(thingName);
-            if (capacity && GetCount(thingName) >= capacity) {
+            if (capacity !== -1 && GetCount(thingName) >= capacity) {
                 SetCapacityShown(thingName, true);
             }
             var capacityEffect = thingType.capacityEffect;
@@ -144,7 +188,7 @@ var Inventory;
         var initialCount = saveData.Stuff[thingName].Count;
         var capacity = Inventory.GetCapacity(thingName);
         var count = saveData.Stuff[thingName].Count += delta;
-        if (capacity !== 0 && count > capacity) {
+        if (capacity !== -1 && count > capacity) {
             count = saveData.Stuff[thingName].Count = capacity;
         }
         else if (count < 0) {
@@ -182,7 +226,7 @@ var Inventory;
             }
             return;
         }
-        if (capacity && count >= capacity) {
+        if (capacity !== -1 && count >= capacity) {
             SetCapacityShown(thingName, true);
         }
     }
@@ -210,9 +254,10 @@ var Inventory;
         var capacityDelta = 0;
         var thingType = defByName[thingName];
         var capacity = thingType.capacity;
-        if (capacity) {
-            baseCapacity = thingType.capacity;
+        if (capacity === -1) {
+            return -1;
         }
+        baseCapacity = thingType.capacity;
         // TODO: make not wasteful
         definitions.forEach(function (thingType) {
             var capacityEffect = thingType.capacityEffect;
@@ -480,7 +525,7 @@ function tryBuy(thingToBuy) {
         return;
     }
     var capacity = Inventory.GetCapacity(thingToBuy);
-    if (capacity && capacity <= Inventory.GetCount(thingToBuy)) {
+    if (capacity !== -1 && Inventory.GetCount(thingToBuy) >= capacity) {
         return;
     }
     cost.Deduct();

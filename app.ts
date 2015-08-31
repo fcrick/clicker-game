@@ -7,16 +7,19 @@ resetButton.addEventListener('click', resetEverything, false);
 
 // TODO:
 // - add automation thing you can buy A-Tomato-Meter
-// - make my event code my generisized
 // - make game editable from inside the game
-// - change how costs can increase
 // - display income
 // - confirm on reset or have an undo
-// - add hidden currencies
-// - add autopurchasing currencies
 // - floating text that highlights progress
 // - give shoutouts to people who have helped - special thanks to Oppositions for that suggestion
 // - make achievements for karbz0ne
+// - work on simulating the game so I know how long things take
+// - auto-generating game definitions
+// - fix capacity not turning off as it should when the game is reset
+// - make buttons disabled if you can't buy because you're at your capacity
+// - fix the numeric display so it looks fine with larger numbers
+// - fractional income support
+// - progress bars for Keg Delivery Guy progress
 
 interface SaveThingInfo {
     Count: number;
@@ -32,12 +35,14 @@ var saveData: SaveData;
 
 interface ThingType {
     name: string;
-    display: string;
+    display?: string; // things without display are never shown
     cost?: { [index: string]: number };
     capacity?: number;
     income?: { [index: string]: number };
     capacityEffect?: { [index: string]: number };
     costRatio?: number;
+    zeroAtCapacity?: boolean;
+    incomeWhenZeroed?: { [index: string]: number };
 }
 
 var definitions = <ThingType[]>[
@@ -47,13 +52,23 @@ var definitions = <ThingType[]>[
         capacity: 100,
     },
     {
-        name: 'tt-Scorer',
+        name: 'tt-Scorer1',
         display: 'Delivery Guy',
         cost: {
             'tt-Point': 10,
         },
         income: {
             'tt-Point': 1,
+        },
+    },
+    {
+        name: 'tt-Scorer2',
+        display: 'Microbrewery',
+        cost: {
+            'tt-FixedPrice1': 25,
+        },
+        income: {
+            'tt-Point': 10,
         },
     },
     {
@@ -64,6 +79,7 @@ var definitions = <ThingType[]>[
         },
         capacityEffect: {
             'tt-Point': 10,
+            'tt-FractionOfPointHolder1': 10,
         }
     },
     {
@@ -94,7 +110,25 @@ var definitions = <ThingType[]>[
         },
         capacity: 100,
         costRatio: 1,
-    }
+    },
+    {
+        name: 'tt-PointHolderMaker1',
+        display: 'Keg Delivery Guy',
+        cost: {
+            'tt-FixedPrice1': 5,
+        },
+        income: {
+            'tt-FractionOfPointHolder1': 1,
+        }
+    },
+    {
+        name: 'tt-FractionOfPointHolder1',
+        capacity: 100,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-PointHolder1': 1,
+        }
+    },
 ];
 
 var defByName: { [index: string]: ThingType } = {};
@@ -174,11 +208,7 @@ module Inventory {
         }
 
         countEvent.FireEvent(thingName, callback => callback(count, initialCount));
-
-        // clean me
-        if (capacity && count >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
+        capacityUpdate(thingName, count, capacity);
 
         return count;
     }
@@ -191,17 +221,35 @@ module Inventory {
 
         saveData.Stuff[thingName].Count = count;
         countEvent.FireEvent(thingName, callback => callback(count, initialCount));
-
-        // clean me
-        var capacity = GetCapacity(thingName);
-        if (capacity && count >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
+        capacityUpdate(thingName, count, GetCapacity(thingName));
 
         return count;
     }
 
+    function capacityUpdate(thingName: string, count: number, capacity: number) {
+        var thingType = defByName[thingName];
+
+        if (thingType.zeroAtCapacity && count >= capacity) {
+            SetCount(thingName, 0);
+            var income = thingType.incomeWhenZeroed;
+            if (income) {
+                Object.keys(income).forEach(earnedThing => {
+                    ChangeCount(earnedThing, income[earnedThing]);
+                });
+            }
+            return;
+        }
+
+        if (capacity && count >= capacity) {
+            SetCapacityShown(thingName, true);
+        }
+    }
+
     export function SetReveal(thingName: string, revealed: boolean) {
+        if (!defByName[thingName].display) {
+            return;
+        }
+
         var current = saveData.Stuff[thingName].IsRevealed;
         if (current === revealed) {
             return;
@@ -212,6 +260,10 @@ module Inventory {
     }
 
     export function IsRevealed(thingName: string) {
+        if (!defByName[thingName].display) {
+            return false;
+        }
+
         return saveData.Stuff[thingName].IsRevealed;
     }
 

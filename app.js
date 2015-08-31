@@ -10,13 +10,23 @@ var definitions = [
         capacity: 100,
     },
     {
-        name: 'tt-Scorer',
+        name: 'tt-Scorer1',
         display: 'Delivery Guy',
         cost: {
             'tt-Point': 10,
         },
         income: {
             'tt-Point': 1,
+        },
+    },
+    {
+        name: 'tt-Scorer2',
+        display: 'Microbrewery',
+        cost: {
+            'tt-FixedPrice1': 25,
+        },
+        income: {
+            'tt-Point': 10,
         },
     },
     {
@@ -27,6 +37,7 @@ var definitions = [
         },
         capacityEffect: {
             'tt-Point': 10,
+            'tt-FractionOfPointHolder1': 10,
         }
     },
     {
@@ -57,7 +68,25 @@ var definitions = [
         },
         capacity: 100,
         costRatio: 1,
-    }
+    },
+    {
+        name: 'tt-PointHolderMaker1',
+        display: 'Keg Delivery Guy',
+        cost: {
+            'tt-FixedPrice1': 5,
+        },
+        income: {
+            'tt-FractionOfPointHolder1': 1,
+        }
+    },
+    {
+        name: 'tt-FractionOfPointHolder1',
+        capacity: 100,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-PointHolder1': 1,
+        }
+    },
 ];
 var defByName = {};
 definitions.forEach(function (thingType) { return defByName[thingType.name] = thingType; });
@@ -126,10 +155,7 @@ var Inventory;
             return count;
         }
         countEvent.FireEvent(thingName, function (callback) { return callback(count, initialCount); });
-        // clean me
-        if (capacity && count >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
+        capacityUpdate(thingName, count, capacity);
         return count;
     }
     Inventory.ChangeCount = ChangeCount;
@@ -140,15 +166,30 @@ var Inventory;
         }
         saveData.Stuff[thingName].Count = count;
         countEvent.FireEvent(thingName, function (callback) { return callback(count, initialCount); });
-        // clean me
-        var capacity = GetCapacity(thingName);
-        if (capacity && count >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
+        capacityUpdate(thingName, count, GetCapacity(thingName));
         return count;
     }
     Inventory.SetCount = SetCount;
+    function capacityUpdate(thingName, count, capacity) {
+        var thingType = defByName[thingName];
+        if (thingType.zeroAtCapacity && count >= capacity) {
+            SetCount(thingName, 0);
+            var income = thingType.incomeWhenZeroed;
+            if (income) {
+                Object.keys(income).forEach(function (earnedThing) {
+                    ChangeCount(earnedThing, income[earnedThing]);
+                });
+            }
+            return;
+        }
+        if (capacity && count >= capacity) {
+            SetCapacityShown(thingName, true);
+        }
+    }
     function SetReveal(thingName, revealed) {
+        if (!defByName[thingName].display) {
+            return;
+        }
         var current = saveData.Stuff[thingName].IsRevealed;
         if (current === revealed) {
             return;
@@ -158,6 +199,9 @@ var Inventory;
     }
     Inventory.SetReveal = SetReveal;
     function IsRevealed(thingName) {
+        if (!defByName[thingName].display) {
+            return false;
+        }
         return saveData.Stuff[thingName].IsRevealed;
     }
     Inventory.IsRevealed = IsRevealed;

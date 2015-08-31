@@ -144,7 +144,7 @@ module Inventory {
                 if (effect) {
                     var callback = (count) => {
                         var capacity = Inventory.GetCapacity(affectedName);
-                        fireCapacityEvent(affectedName, capacity);
+                        capacityEvent.FireEvent(affectedName, callback => callback(capacity));
                     };
                     GetCountEvent(thingName).Register(callback);
                 }
@@ -173,8 +173,7 @@ module Inventory {
             return count;
         }
 
-        //fireCallback(InvEvent.Count, thingName, count);
-        fireCountEvent(thingName, count, initialCount);
+        countEvent.FireEvent(thingName, callback => callback(count, initialCount));
 
         // clean me
         if (capacity && count >= capacity) {
@@ -191,9 +190,7 @@ module Inventory {
         }
 
         saveData.Stuff[thingName].Count = count;
-
-        //fireCallback(InvEvent.Count, thingName, count);
-        fireCountEvent(thingName, count, initialCount);
+        countEvent.FireEvent(thingName, callback => callback(count, initialCount));
 
         // clean me
         var capacity = GetCapacity(thingName);
@@ -211,8 +208,7 @@ module Inventory {
         }
 
         saveData.Stuff[thingName].IsRevealed = revealed;
-
-        fireRevealEvent(thingName, revealed);
+        revealEvent.FireEvent(thingName, callback => callback(revealed));
     }
 
     export function IsRevealed(thingName: string) {
@@ -254,7 +250,7 @@ module Inventory {
         }
 
         saveData.Stuff[thingName].IsCapShown = shown;
-        fireShowCapacityEvent(thingName, shown);
+        showCapacityEvent.FireEvent(thingName, callback => callback(shown));
     }
 
     export function IsCapacityShown(thingName: string) {
@@ -268,7 +264,7 @@ module Inventory {
         }
 
         enabledTable[thingName] = enabled;
-        fireEnableEvent(thingName, enabled);
+        enableEvent.FireEvent(thingName, callback => callback(enabled));
     }
 
     export function IsEnabled(thingName: string) {
@@ -287,130 +283,48 @@ module Inventory {
         });
     }
 
-    function fireCallback(eventName: string, thingName: string, count: number) {
-        var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName];
-        if (!thingNameToCallbacks) {
-            return;
-        }
-
-        var callbacks = thingNameToCallbacks[thingName];
-        if (callbacks) {
-            callbacks.forEach(callback => callback(count));
-        }
-    }
-
-    export function Register(eventName: string, thingName: string, callback: (count: number) => void) {
-        var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName]
-        if (!thingNameToCallbacks) {
-            thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName] = {};
-        }
-
-        var callbacks = thingNameToCallbacks[thingName];
-        if (!callbacks) {
-            callbacks = thingNameToCallbacks[thingName] = [];
-        }
-
-        callbacks.push(callback);
-    }
-
-    export function Unregister(eventName: string, thingName: string, callback: (count: number) => void) {
-        var thingNameToCallbacks = eventNameToThingNameToCallbacks[eventName];
-        if (!thingNameToCallbacks) {
-            return false;
-        }
-
-        var callbacks = thingNameToCallbacks[thingName];
-        if (!callbacks) {
-            return false;
-        }
-
-        var index = callbacks.indexOf(callback);
-
-        if (index === -1) {
-            return false;
-        }
-
-        callbacks.splice(index, 1);
-        return true;
-    }
-
     // event callback interfaces
     interface CountCallback { (count: number, previous: number): void; };
     interface CapacityCallback { (capacity: number): void; };
     interface ToggleCallback { (toggled: boolean): void; };
 
-    // Count events
-    var countEvents: { [thingName: string]: Events.GameEvent<CountCallback> } = {};
-    export function GetCountEvent(thingName: string): Events.IGameEvent<CountCallback> {
-        return getThingEvent(thingName, countEvents);
-    }
-    function fireCountEvent(thingName: string, count: number, previous: number) {
-        fireThingEvent(thingName, countEvents, callback => callback(count, previous));
-    }
+    class ThingEvent<T> {
+        private eventTable: { [thingName: string]: Events.GameEvent<T> } = {};
+        public GetEvent(thingName: string): Events.IGameEvent<T> {
+            var event = this.eventTable[thingName];
+            if (!event) {
+                event = this.eventTable[thingName] = new Events.GameEvent<T>();
+            }
 
-    // Capacity events
-    var capacityEvents: { [thingName: string]: Events.GameEvent<CapacityCallback> } = {};
-    export function GetCapacityEvent(thingName: string): Events.IGameEvent<CapacityCallback> {
-        return getThingEvent(thingName, capacityEvents);
-    }
-    function fireCapacityEvent(thingName: string, capacity: number) {
-        fireThingEvent(thingName, capacityEvents, callback => callback(capacity));
-    }
-
-    // Enable events (enabling and disabling buy buttons)
-    var enableEvents: { [thingName: string]: Events.GameEvent<ToggleCallback> } = {};
-    export function GetEnableEvent(thingName: string): Events.IGameEvent<ToggleCallback> {
-        return getThingEvent(thingName, enableEvents);
-    }
-    function fireEnableEvent(thingName: string, enabled: boolean) {
-        fireThingEvent(thingName, enableEvents, callback => callback(enabled));
-    }
-
-    // Reveal and hide events (for showing that a thing exists at all)
-    var revealEvents: { [thingName: string]: Events.GameEvent<ToggleCallback> } = {};
-    export function GetRevealEvent(thingName: string): Events.IGameEvent<ToggleCallback> {
-        return getThingEvent(thingName, revealEvents);
-    }
-    function fireRevealEvent(thingName: string, enabled: boolean) {
-        fireThingEvent(thingName, revealEvents, callback => callback(enabled));
-    }
-
-    // Show and hide capacity events
-    var showCapacityEvents: { [thingName: string]: Events.GameEvent<ToggleCallback> } = {};
-    export function GetShowCapacityEvent(thingName: string): Events.IGameEvent<ToggleCallback> {
-        return getThingEvent(thingName, showCapacityEvents);
-    }
-    function fireShowCapacityEvent(thingName: string, enabled: boolean) {
-        fireThingEvent(thingName, showCapacityEvents, callback => callback(enabled));
-    }
-
-    function fireThingEvent<T>(
-        thingName: string,
-        eventTable: { [index: string]: Events.GameEvent<T> },
-        caller: (callback: T) => void
-    ) {
-        var event = eventTable[thingName];
-        if (!event) {
-            return;
+            return event;
         }
-
-        event.Fire(caller);
-    }
-
-    function getThingEvent<T>(
-        thingName: string,
-        eventTable: { [index: string]: Events.GameEvent<T> }
-    ): Events.IGameEvent<T> {
-
-        var event = eventTable[thingName];
-        if (!event) {
-            event = eventTable[thingName] = new Events.GameEvent<T>();
+        public FireEvent(thingName: string, caller: (callback: T) => void) {
+            var event = this.eventTable[thingName];
+            if (event)
+                event.Fire(caller);
         }
-
-        return event;
     }
 
-    var eventNameToThingNameToCallbacks: { [eventName: string]: { [index: string]: { (count: number): void }[] } } = {};
+    // for updating counts of things
+    var countEvent = new ThingEvent<CountCallback>();
+    export var GetCountEvent = (thingName: string) => countEvent.GetEvent(thingName);
+
+    // for updating capacity of things
+    var capacityEvent = new ThingEvent<CapacityCallback>();
+    export var GetCapacityEvent = (thingName: string) => capacityEvent.GetEvent(thingName);
+
+    // for enabling and disabling buy buttons
+    var enableEvent = new ThingEvent<ToggleCallback>();
+    export var GetEnableEvent = (thingName: string) => enableEvent.GetEvent(thingName);
+
+    // for showing that things exist at all
+    var revealEvent = new ThingEvent<ToggleCallback>();
+    export var GetRevealEvent = (thingName: string) => revealEvent.GetEvent(thingName);
+
+    // for showing the capacity of a thing
+    var showCapacityEvent = new ThingEvent<ToggleCallback>();
+    export var GetShowCapacityEvent = (thingName: string) => showCapacityEvent.GetEvent(thingName);
+
     var enabledTable: { [index: string]: boolean } = {};
 }
 

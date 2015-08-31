@@ -313,7 +313,7 @@ function createThingRow(thingName) {
     var toUnregister = [];
     var unregisterMe = function (callback) { return toUnregister.push(callback); };
     outerDiv.appendChild(createName(defByName[thingName].display));
-    outerDiv.appendChild(createCountDiv(thingName));
+    outerDiv.appendChild(createCountDiv(thingName, unregisterMe));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
     var hideThingRow = function (revealed) {
         if (revealed) {
@@ -326,7 +326,7 @@ function createThingRow(thingName) {
     Inventory.GetRevealEvent(thingName).Register(hideThingRow);
     document.getElementById('inventory').appendChild(outerDiv);
 }
-function createCountDiv(thingName) {
+function createCountDiv(thingName, unregisterMe) {
     var countDiv = document.createElement('div');
     var currentDiv = document.createElement('div');
     currentDiv.id = 'current-' + thingName;
@@ -335,26 +335,28 @@ function createCountDiv(thingName) {
     updateCount(count);
     // TODO: make sure this gets unregistered
     Inventory.GetCountEvent(thingName).Register(updateCount);
+    unregisterMe(function () { return Inventory.GetCountEvent(thingName).Unregister(updateCount); });
     currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
     var capShown = Inventory.IsCapacityShown(thingName);
     if (capShown) {
-        createCapacity(thingName, countDiv);
+        createCapacity(thingName, countDiv, unregisterMe);
     }
     else {
         var callback = function (show) {
             if (!show) {
                 return;
             }
-            createCapacity(thingName, countDiv);
+            createCapacity(thingName, countDiv, unregisterMe);
             Inventory.GetShowCapacityEvent(thingName).Unregister(callback);
         };
         Inventory.GetShowCapacityEvent(thingName).Register(callback);
+        unregisterMe(function () { return Inventory.GetShowCapacityEvent(thingName).Unregister(callback); });
     }
     countDiv.className = cellClass;
     return countDiv;
 }
-function createCapacity(thingName, countDiv) {
+function createCapacity(thingName, countDiv, unregisterMe) {
     var slashDiv = document.createElement('div');
     slashDiv.innerText = '/';
     slashDiv.className = cellClass;
@@ -362,8 +364,8 @@ function createCapacity(thingName, countDiv) {
     capacityDiv.id = 'capacity-' + thingName;
     var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
     updateCapacity(Inventory.GetCapacity(thingName));
-    // TODO: unregister
     Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
+    unregisterMe(function () { return Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity); });
     capacityDiv.className = cellClass;
     [slashDiv, capacityDiv].forEach(function (div) { return countDiv.appendChild(div); });
 }

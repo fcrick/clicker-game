@@ -399,7 +399,7 @@ function createThingRow(thingName: string) {
     var unregisterMe = callback => toUnregister.push(callback);
 
     outerDiv.appendChild(createName(defByName[thingName].display));
-    outerDiv.appendChild(createCountDiv(thingName));
+    outerDiv.appendChild(createCountDiv(thingName, unregisterMe));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
 
     var hideThingRow = (revealed: boolean) => {
@@ -417,7 +417,7 @@ function createThingRow(thingName: string) {
     document.getElementById('inventory').appendChild(outerDiv);
 }
 
-function createCountDiv(thingName: string) {
+function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void }): void }) {
     var countDiv = document.createElement('div');
 
     var currentDiv = document.createElement('div');
@@ -430,13 +430,14 @@ function createCountDiv(thingName: string) {
 
     // TODO: make sure this gets unregistered
     Inventory.GetCountEvent(thingName).Register(updateCount);
+    unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateCount));
 
     currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
 
     var capShown = Inventory.IsCapacityShown(thingName);
     if (capShown) {
-        createCapacity(thingName, countDiv);
+        createCapacity(thingName, countDiv, unregisterMe);
     }
     else {
         var callback = (show: boolean) => {
@@ -444,17 +445,18 @@ function createCountDiv(thingName: string) {
                 return;
             }
 
-            createCapacity(thingName, countDiv);
+            createCapacity(thingName, countDiv, unregisterMe);
             Inventory.GetShowCapacityEvent(thingName).Unregister(callback);
         }
         Inventory.GetShowCapacityEvent(thingName).Register(callback);
+        unregisterMe(() => Inventory.GetShowCapacityEvent(thingName).Unregister(callback));
     }
 
     countDiv.className = cellClass;
     return countDiv;
 }
 
-function createCapacity(thingName: string, countDiv: HTMLDivElement) {
+function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterMe: { (unreg: { (): void }): void }) {
     var slashDiv = document.createElement('div');
     slashDiv.innerText = '/';
     slashDiv.className = cellClass;
@@ -464,8 +466,10 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement) {
 
     var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
     updateCapacity(Inventory.GetCapacity(thingName));
-    // TODO: unregister
+
     Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
+    unregisterMe(() => Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity));
+
     capacityDiv.className = cellClass;
 
     [slashDiv, capacityDiv].forEach(div => countDiv.appendChild(div));

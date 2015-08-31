@@ -70,6 +70,9 @@ var definitions = <ThingType[]>[
         cost: {
             'tt-FixedPrice1': 25,
         },
+        capacityEffect: {
+            'tt-PointHolder1': 50,
+        },
         income: {
             'tt-Point': 10,
         },
@@ -88,7 +91,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-PointHolder1',
         display: 'Keg',
-        capacity: -1,
+        capacity: 50,
         cost: {
             'tt-Point': 25,
         },

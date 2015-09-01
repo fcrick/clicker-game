@@ -38,6 +38,7 @@ var saveData: SaveData;
 interface ThingType {
     name: string;
     display?: string; // things without display are never shown
+    title?: string; // tooltip display
     cost?: { [index: string]: number };
     capacity: number;
     income?: { [index: string]: number };
@@ -45,6 +46,7 @@ interface ThingType {
     costRatio?: number;
     zeroAtCapacity?: boolean;
     incomeWhenZeroed?: { [index: string]: number };
+    progressThing?: string; // value is name of thing to show percentage of
 }
 
 var definitions = <ThingType[]>[
@@ -56,6 +58,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-Scorer1',
         display: 'Delivery Guy',
+        title: 'Delivers to you 1 Beer per tick',
         capacity: -1,
         cost: {
             'tt-Point': 10,
@@ -67,6 +70,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-Scorer2',
         display: 'Microbrewery',
+        title: 'Makes a lot more Beer and stores Kegs',
         capacity: -1,
         cost: {
             'tt-FixedPrice1': 25,
@@ -81,6 +85,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-Scorer3',
         display: 'Taxi Driver',
+        title: 'Earns Benjamins and skims a lot off the top',
         capacity: 0,
         cost: {
             'tt-Point': 100,
@@ -92,6 +97,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-PointHolder1',
         display: 'Keg',
+        title: 'Increases Beer capacity',
         capacity: 50,
         cost: {
             'tt-Point': 25,
@@ -99,16 +105,18 @@ var definitions = <ThingType[]>[
         capacityEffect: {
             'tt-Point': 10,
             'tt-FractionOfPointHolder1': 10,
-        }
+        },
+        progressThing: 'tt-FractionOfPointHolder1',
     },
     {
         name: 'tt-PointHolder2',
         display: 'Garage',
+        title: 'Holds taxis',
         capacity: -1,
         cost: {
             'tt-FixedPrice1': 10,
         },
-        costRatio: 1.4,
+        costRatio: 1.3,
         capacityEffect: {
             'tt-Scorer3': 2,
         }
@@ -116,6 +124,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-PointHolder3',
         display: 'Swimming Pool',
+        title: 'A storage facility for Beer',
         capacity: -1,
         cost: {
             'tt-Point': 400,
@@ -127,6 +136,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-PointHolder4',
         display: 'Piggy Bank',
+        title: 'Increases Benjamin capacity',
         capacity: -1,
         cost: {
             'tt-Point': 4000,
@@ -138,18 +148,21 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-FixedPrice1',
         display: 'Benjamin',
+        title: 'One hundred dollar bills',
         cost: {
             'tt-Point': 250,
         },
         capacityEffect: {
-            'tt-FractionOfFixedPrice1': 4,
+            'tt-FractionOfFixedPrice1': 1,
         },
         capacity: 100,
         costRatio: 1,
+        progressThing: 'tt-FractionOfFixedPrice1',
     },
     {
         name: 'tt-PointHolderMaker1',
         display: 'Keg Delivery Guy',
+        title: 'Delivers free Kegs to you...eventually',
         capacity: -1,
         cost: {
             'tt-FixedPrice1': 5,
@@ -214,6 +227,8 @@ module Inventory {
             });
 
             GetCountEvent(thingName).Register(callback);
+
+            GetCapacityEvent(thingName).Register(callback);
 
             callback(GetCount(thingName));
 
@@ -505,7 +520,7 @@ function createThingRow(thingName: string) {
     var toUnregister: { (): void }[] = [];
     var unregisterMe = callback => toUnregister.push(callback);
 
-    outerDiv.appendChild(createName(defByName[thingName].display));
+    outerDiv.appendChild(createName(thingName));
     outerDiv.appendChild(createCountDiv(thingName, unregisterMe));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
 
@@ -527,7 +542,7 @@ function createThingRow(thingName: string) {
 function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void }): void }) {
     var countDiv = document.createElement('div');
 
-    var currentDiv = document.createElement('div');
+    var currentDiv = document.createElement('span');
     currentDiv.id = 'current-' + thingName;
 
     var count = Inventory.GetCount(thingName);
@@ -539,7 +554,6 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
     Inventory.GetCountEvent(thingName).Register(updateCount);
     unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateCount));
 
-    currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
 
     var capShown = Inventory.IsCapacityShown(thingName);
@@ -564,11 +578,10 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
 }
 
 function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterMe: { (unreg: { (): void }): void }) {
-    var slashDiv = document.createElement('div');
-    slashDiv.innerText = '/';
-    slashDiv.className = cellClass;
+    var slashDiv = document.createElement('span');
+    slashDiv.innerText = ' / ';
 
-    var capacityDiv = document.createElement('div');
+    var capacityDiv = document.createElement('span');
     capacityDiv.id = 'capacity-' + thingName;
 
     var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
@@ -577,16 +590,47 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterM
     Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
     unregisterMe(() => Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity));
 
-    capacityDiv.className = cellClass;
-
     [slashDiv, capacityDiv].forEach(div => countDiv.appendChild(div));
 }
 
-function createName(display: string) {
+function createName(thingName: string) {
+    var display = defByName[thingName].display;
+
     var nameDiv = document.createElement('div');
 
     nameDiv.innerText = display;
     nameDiv.className = cellClass;
+
+    var thingType = defByName[thingName];
+    var progressThing = thingType.progressThing;
+
+    if (progressThing) {
+        var progressDiv = document.createElement('div');
+        progressDiv.className = 'progress progress-bar';
+        progressDiv.style.width = '0%';
+
+        var callback = () => {
+            var current = Inventory.GetCount(progressThing);
+            var max = Inventory.GetCapacity(progressThing);
+
+            var percent = (Math.floor(current / max * 700) / 10);
+
+            // check if we're full
+            var count = Inventory.GetCount(thingName);
+            var capacity = Inventory.GetCapacity(thingName);
+
+            if (count === capacity) {
+                percent = 0;
+            }
+                
+            progressDiv.style.width = percent + '%';
+        };
+
+        Inventory.GetCountEvent(progressThing).Register(callback);
+        Inventory.GetCapacityEvent(progressThing).Register(callback);
+
+        nameDiv.appendChild(progressDiv);
+    }
 
     return nameDiv;
 }
@@ -595,8 +639,15 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
 
+    var thingType = defByName[thingName];
+
     var buyButton = document.createElement('button');
     var id = buyButton.id = 'buy-' + thingName;
+
+    var title = thingType.title;
+    if (title) {
+        buyButton.title = title;
+    }
 
     var updateButton: (count?: number) => void = () => buyButton.innerText = getButtonText(thingName);
     updateButton();

@@ -12,6 +12,7 @@ var definitions = [
     {
         name: 'tt-Scorer1',
         display: 'Delivery Guy',
+        title: 'Delivers to you 1 Beer per tick',
         capacity: -1,
         cost: {
             'tt-Point': 10,
@@ -23,6 +24,7 @@ var definitions = [
     {
         name: 'tt-Scorer2',
         display: 'Microbrewery',
+        title: 'Makes a lot more Beer and stores Kegs',
         capacity: -1,
         cost: {
             'tt-FixedPrice1': 25,
@@ -37,6 +39,7 @@ var definitions = [
     {
         name: 'tt-Scorer3',
         display: 'Taxi Driver',
+        title: 'Earns Benjamins and skims a lot off the top',
         capacity: 0,
         cost: {
             'tt-Point': 100,
@@ -48,6 +51,7 @@ var definitions = [
     {
         name: 'tt-PointHolder1',
         display: 'Keg',
+        title: 'Increases Beer capacity',
         capacity: 50,
         cost: {
             'tt-Point': 25,
@@ -55,16 +59,18 @@ var definitions = [
         capacityEffect: {
             'tt-Point': 10,
             'tt-FractionOfPointHolder1': 10,
-        }
+        },
+        progressThing: 'tt-FractionOfPointHolder1',
     },
     {
         name: 'tt-PointHolder2',
         display: 'Garage',
+        title: 'Holds taxis',
         capacity: -1,
         cost: {
             'tt-FixedPrice1': 10,
         },
-        costRatio: 1.4,
+        costRatio: 1.3,
         capacityEffect: {
             'tt-Scorer3': 2,
         }
@@ -72,6 +78,7 @@ var definitions = [
     {
         name: 'tt-PointHolder3',
         display: 'Swimming Pool',
+        title: 'A storage facility for Beer',
         capacity: -1,
         cost: {
             'tt-Point': 400,
@@ -83,6 +90,7 @@ var definitions = [
     {
         name: 'tt-PointHolder4',
         display: 'Piggy Bank',
+        title: 'Increases Benjamin capacity',
         capacity: -1,
         cost: {
             'tt-Point': 4000,
@@ -94,18 +102,21 @@ var definitions = [
     {
         name: 'tt-FixedPrice1',
         display: 'Benjamin',
+        title: 'One hundred dollar bills',
         cost: {
             'tt-Point': 250,
         },
         capacityEffect: {
-            'tt-FractionOfFixedPrice1': 4,
+            'tt-FractionOfFixedPrice1': 1,
         },
         capacity: 100,
         costRatio: 1,
+        progressThing: 'tt-FractionOfFixedPrice1',
     },
     {
         name: 'tt-PointHolderMaker1',
         display: 'Keg Delivery Guy',
+        title: 'Delivers free Kegs to you...eventually',
         capacity: -1,
         cost: {
             'tt-FixedPrice1': 5,
@@ -162,6 +173,7 @@ var Inventory;
                 Inventory.GetCountEvent(needed).Register(callback);
             });
             Inventory.GetCountEvent(thingName).Register(callback);
+            Inventory.GetCapacityEvent(thingName).Register(callback);
             callback(GetCount(thingName));
             var capacity = GetCapacity(thingName);
             if (capacity !== -1 && GetCount(thingName) >= capacity) {
@@ -404,7 +416,7 @@ function createThingRow(thingName) {
     outerDiv.className = 'row';
     var toUnregister = [];
     var unregisterMe = function (callback) { return toUnregister.push(callback); };
-    outerDiv.appendChild(createName(defByName[thingName].display));
+    outerDiv.appendChild(createName(thingName));
     outerDiv.appendChild(createCountDiv(thingName, unregisterMe));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
     var hideThingRow = function (revealed) {
@@ -420,7 +432,7 @@ function createThingRow(thingName) {
 }
 function createCountDiv(thingName, unregisterMe) {
     var countDiv = document.createElement('div');
-    var currentDiv = document.createElement('div');
+    var currentDiv = document.createElement('span');
     currentDiv.id = 'current-' + thingName;
     var count = Inventory.GetCount(thingName);
     var updateCount = function (count) { return currentDiv.innerText = count.toString(); };
@@ -428,7 +440,6 @@ function createCountDiv(thingName, unregisterMe) {
     // TODO: make sure this gets unregistered
     Inventory.GetCountEvent(thingName).Register(updateCount);
     unregisterMe(function () { return Inventory.GetCountEvent(thingName).Unregister(updateCount); });
-    currentDiv.className = cellClass;
     countDiv.appendChild(currentDiv);
     var capShown = Inventory.IsCapacityShown(thingName);
     if (capShown) {
@@ -449,29 +460,55 @@ function createCountDiv(thingName, unregisterMe) {
     return countDiv;
 }
 function createCapacity(thingName, countDiv, unregisterMe) {
-    var slashDiv = document.createElement('div');
-    slashDiv.innerText = '/';
-    slashDiv.className = cellClass;
-    var capacityDiv = document.createElement('div');
+    var slashDiv = document.createElement('span');
+    slashDiv.innerText = ' / ';
+    var capacityDiv = document.createElement('span');
     capacityDiv.id = 'capacity-' + thingName;
     var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
     updateCapacity(Inventory.GetCapacity(thingName));
     Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
     unregisterMe(function () { return Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity); });
-    capacityDiv.className = cellClass;
     [slashDiv, capacityDiv].forEach(function (div) { return countDiv.appendChild(div); });
 }
-function createName(display) {
+function createName(thingName) {
+    var display = defByName[thingName].display;
     var nameDiv = document.createElement('div');
     nameDiv.innerText = display;
     nameDiv.className = cellClass;
+    var thingType = defByName[thingName];
+    var progressThing = thingType.progressThing;
+    if (progressThing) {
+        var progressDiv = document.createElement('div');
+        progressDiv.className = 'progress progress-bar';
+        progressDiv.style.width = '0%';
+        var callback = function () {
+            var current = Inventory.GetCount(progressThing);
+            var max = Inventory.GetCapacity(progressThing);
+            var percent = (Math.floor(current / max * 700) / 10);
+            // check if we're full
+            var count = Inventory.GetCount(thingName);
+            var capacity = Inventory.GetCapacity(thingName);
+            if (count === capacity) {
+                percent = 0;
+            }
+            progressDiv.style.width = percent + '%';
+        };
+        Inventory.GetCountEvent(progressThing).Register(callback);
+        Inventory.GetCapacityEvent(progressThing).Register(callback);
+        nameDiv.appendChild(progressDiv);
+    }
     return nameDiv;
 }
 function createButton(thingName, unregisterMe) {
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
+    var thingType = defByName[thingName];
     var buyButton = document.createElement('button');
     var id = buyButton.id = 'buy-' + thingName;
+    var title = thingType.title;
+    if (title) {
+        buyButton.title = title;
+    }
     var updateButton = function () { return buyButton.innerText = getButtonText(thingName); };
     updateButton();
     Inventory.GetCountEvent(thingName).Register(updateButton);

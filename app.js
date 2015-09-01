@@ -198,7 +198,9 @@ var Inventory;
         var initialCount = saveData.Stuff[thingName].Count;
         var capacity = Inventory.GetCapacity(thingName);
         var count = saveData.Stuff[thingName].Count += delta;
+        var overflow = 0;
         if (capacity !== -1 && count > capacity) {
+            overflow = count - capacity;
             count = saveData.Stuff[thingName].Count = capacity;
         }
         else if (count < 0) {
@@ -210,6 +212,10 @@ var Inventory;
         }
         countEvent.FireEvent(thingName, function (callback) { return callback(count, initialCount); });
         capacityUpdate(thingName, count, capacity);
+        var afterCount = GetCount(thingName);
+        if (afterCount !== count && overflow !== 0) {
+            ChangeCount(thingName, overflow);
+        }
         return count;
     }
     Inventory.ChangeCount = ChangeCount;
@@ -317,7 +323,10 @@ var Inventory;
         definitions.forEach(function (thingType) {
             var thingName = thingType.name;
             SetCount(thingName, 0);
-            SetReveal(thingName, !thingType.cost);
+        });
+        definitions.forEach(function (thingType) {
+            var thingName = thingType.name;
+            SetReveal(thingName, !thingType.cost); // this should also check capacity
             SetCapacityShown(thingName, false);
         });
     }
@@ -431,6 +440,7 @@ function createThingRow(thingName) {
 }
 function createCountDiv(thingName, unregisterMe) {
     var countDiv = document.createElement('div');
+    countDiv.className = cellClass;
     var currentDiv = document.createElement('span');
     currentDiv.id = 'current-' + thingName;
     var count = Inventory.GetCount(thingName);
@@ -443,18 +453,15 @@ function createCountDiv(thingName, unregisterMe) {
     if (capShown) {
         createCapacity(thingName, countDiv, unregisterMe);
     }
-    else {
-        var callback = function (show) {
-            if (!show) {
-                return;
-            }
-            createCapacity(thingName, countDiv, unregisterMe);
-            Inventory.GetShowCapacityEvent(thingName).Unregister(callback);
-        };
-        Inventory.GetShowCapacityEvent(thingName).Register(callback);
-        unregisterMe(function () { return Inventory.GetShowCapacityEvent(thingName).Unregister(callback); });
-    }
-    countDiv.className = cellClass;
+    // set up callback to show capacity display
+    var callback = function (show) {
+        if (!show) {
+            return;
+        }
+        createCapacity(thingName, countDiv, unregisterMe);
+    };
+    Inventory.GetShowCapacityEvent(thingName).Register(callback);
+    unregisterMe(function () { return Inventory.GetShowCapacityEvent(thingName).Unregister(callback); });
     return countDiv;
 }
 function createCapacity(thingName, countDiv, unregisterMe) {
@@ -465,8 +472,22 @@ function createCapacity(thingName, countDiv, unregisterMe) {
     var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
     updateCapacity(Inventory.GetCapacity(thingName));
     Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
-    unregisterMe(function () { return Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity); });
-    [slashDiv, capacityDiv].forEach(function (div) { return countDiv.appendChild(div); });
+    var unregister = function () { return Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity); };
+    unregisterMe(unregister);
+    var elements = [slashDiv, capacityDiv];
+    elements.forEach(function (div) { return countDiv.appendChild(div); });
+    var removeCapacity = function (shown) {
+        if (shown) {
+            return;
+        }
+        elements.forEach(function (div) { return countDiv.removeChild(div); });
+        unregister(); // remove event added above
+        Inventory.GetShowCapacityEvent(thingName).Unregister(removeCapacity);
+    };
+    Inventory.GetShowCapacityEvent(thingName).Register(removeCapacity);
+    unregisterMe(function () { return Inventory.GetShowCapacityEvent(thingName).Unregister(removeCapacity); });
+}
+function removeCapacity(thingName, countDiv) {
 }
 function createName(thingName) {
     var display = defByName[thingName].display;

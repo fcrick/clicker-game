@@ -6,17 +6,21 @@ var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
 
 // TODO:
-// - add automation thing you can buy A-Tomato-Meter
 // - make game editable from inside the game
+//   - fix remaining event bugs
+//   - hook up events for enything missing them
+//   - class that represents a thing type so I have a place to hook events
+//   - switching to a more explicit component architecture
+
+// - add automation thing you can buy A-Tomato-Meter
 // - display income
 // - floating text that highlights progress
 // - give shoutouts to people who have helped - special thanks to Oppositions for that suggestion
-// - - thesamelabel for helping me get flex working
-// - - mistamadd001 suggested keg capacities with microbreweries
+//   - thesamelabel for helping me get flex working
+//   - mistamadd001 suggested keg capacities with microbreweries
 // - make achievements for karbz0ne
 // - work on simulating the game so I know how long things take
 // - auto-generating game definitions
-// - fix capacity not turning off as it should when the game is reset
 // - fractional income support
 // - enforce display ordering so reloading the page doesn't change the order
 // - highlights when a button is hovered
@@ -257,8 +261,10 @@ module Inventory {
         var initialCount = saveData.Stuff[thingName].Count;
         var capacity = Inventory.GetCapacity(thingName);
         var count = saveData.Stuff[thingName].Count += delta;
+        var overflow = 0;
 
         if (capacity !== -1 && count > capacity) {
+            overflow = count - capacity;
             count = saveData.Stuff[thingName].Count = capacity;
         }
         else if (count < 0) {
@@ -272,6 +278,11 @@ module Inventory {
 
         countEvent.FireEvent(thingName, callback => callback(count, initialCount));
         capacityUpdate(thingName, count, capacity);
+
+        var afterCount = GetCount(thingName);
+        if (afterCount !== count && overflow !== 0) {
+            ChangeCount(thingName, overflow);
+        }
 
         return count;
     }
@@ -397,9 +408,12 @@ module Inventory {
     export function Reset() {
         definitions.forEach(thingType => {
             var thingName = thingType.name;
-
             SetCount(thingName, 0);
-            SetReveal(thingName, !thingType.cost);
+        });
+
+        definitions.forEach(thingType => {
+            var thingName = thingType.name;
+            SetReveal(thingName, !thingType.cost); // this should also check capacity
             SetCapacityShown(thingName, false);
         });
     }
@@ -542,6 +556,7 @@ function createThingRow(thingName: string) {
 
 function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void }): void }) {
     var countDiv = document.createElement('div');
+    countDiv.className = cellClass;
 
     var currentDiv = document.createElement('span');
     currentDiv.id = 'current-' + thingName;
@@ -560,20 +575,18 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
     if (capShown) {
         createCapacity(thingName, countDiv, unregisterMe);
     }
-    else {
-        var callback = (show: boolean) => {
-            if (!show) {
-                return;
-            }
 
-            createCapacity(thingName, countDiv, unregisterMe);
-            Inventory.GetShowCapacityEvent(thingName).Unregister(callback);
+    // set up callback to show capacity display
+    var callback = (show: boolean) => {
+        if (!show) {
+            return;
         }
-        Inventory.GetShowCapacityEvent(thingName).Register(callback);
-        unregisterMe(() => Inventory.GetShowCapacityEvent(thingName).Unregister(callback));
-    }
 
-    countDiv.className = cellClass;
+        createCapacity(thingName, countDiv, unregisterMe);
+    }
+    Inventory.GetShowCapacityEvent(thingName).Register(callback);
+    unregisterMe(() => Inventory.GetShowCapacityEvent(thingName).Unregister(callback));
+    
     return countDiv;
 }
 
@@ -588,9 +601,28 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterM
     updateCapacity(Inventory.GetCapacity(thingName));
 
     Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
-    unregisterMe(() => Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity));
+    var unregister = () => Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity);
+    unregisterMe(unregister);
 
-    [slashDiv, capacityDiv].forEach(div => countDiv.appendChild(div));
+    var elements = [slashDiv, capacityDiv];
+    elements.forEach(div => countDiv.appendChild(div));
+
+    var removeCapacity = (shown: boolean) => {
+        if (shown) {
+            return;
+        }
+
+        elements.forEach(div => countDiv.removeChild(div));
+        unregister(); // remove event added above
+        Inventory.GetShowCapacityEvent(thingName).Unregister(removeCapacity);
+    }
+
+    Inventory.GetShowCapacityEvent(thingName).Register(removeCapacity);
+    unregisterMe(() => Inventory.GetShowCapacityEvent(thingName).Unregister(removeCapacity));
+}
+
+function removeCapacity(thingName: string, countDiv: HTMLDivElement) {
+
 }
 
 function createName(thingName: string) {

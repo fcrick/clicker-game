@@ -162,12 +162,7 @@ var Inventory;
                 if (capacity !== 0 && (count > 0 || canAfford)) {
                     SetReveal(thingName, true);
                 }
-                if (canAfford && (capacity === -1 || count < capacity)) {
-                    SetEnabled(thingName, true);
-                }
-                else {
-                    SetEnabled(thingName, false);
-                }
+                SetEnabled(thingName, IsEnabled(thingName));
             };
             purchaseCost.GetThingNames().forEach(function (needed) {
                 Inventory.GetCountEvent(needed).Register(callback);
@@ -311,8 +306,10 @@ var Inventory;
     }
     Inventory.SetEnabled = SetEnabled;
     function IsEnabled(thingName) {
-        var cost = new PurchaseCost(thingName);
-        return cost.CanAfford();
+        var canAfford = new PurchaseCost(thingName).CanAfford();
+        var count = GetCount(thingName);
+        var capacity = GetCapacity(thingName);
+        return canAfford && (capacity === -1 || count < capacity);
     }
     Inventory.IsEnabled = IsEnabled;
     // full game reset

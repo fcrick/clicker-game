@@ -18,10 +18,10 @@ resetButton.addEventListener('click', resetEverything, false);
 // - fix capacity not turning off as it should when the game is reset
 // - fix the numeric display so it looks fine with larger numbers
 // - fractional income support
-// - progress bars for Keg Delivery Guy progress
-// - make 0 no longer mean unlimited capacity
 // - enforce display ordering so reloading the page doesn't change the order
 // - mistamadd001 suggested keg capacities with microbreweries
+// - highlights when a button is hovered
+// - make text vertically centered
 
 interface SaveThingInfo {
     Count: number;
@@ -214,12 +214,7 @@ module Inventory {
                     SetReveal(thingName, true);
                 }
 
-                if (canAfford && (capacity === -1 || count < capacity)) {
-                    SetEnabled(thingName, true);
-                }
-                else {
-                    SetEnabled(thingName, false);
-                }
+                SetEnabled(thingName, IsEnabled(thingName));
             }
 
             purchaseCost.GetThingNames().forEach(needed => {
@@ -390,8 +385,12 @@ module Inventory {
     }
 
     export function IsEnabled(thingName: string) {
-        var cost = new PurchaseCost(thingName);
-        return cost.CanAfford();
+        var canAfford = new PurchaseCost(thingName).CanAfford();
+
+        var count = GetCount(thingName);
+        var capacity = GetCapacity(thingName);
+
+        return canAfford && (capacity === -1 || count < capacity)
     }
 
     // full game reset

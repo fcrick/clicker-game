@@ -21,6 +21,7 @@ resetButton.addEventListener('click', resetEverything, false);
 // - progress bars for Keg Delivery Guy progress
 // - make 0 no longer mean unlimited capacity
 // - enforce display ordering so reloading the page doesn't change the order
+// - mistamadd001 suggested keg capacities with microbreweries
 
 interface SaveThingInfo {
     Count: number;

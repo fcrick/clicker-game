@@ -30,16 +30,16 @@ var definitions = [
             'tt-FixedPrice1': 25,
         },
         capacityEffect: {
-            'tt-PointHolder1': 50,
+            'tt-PointHolder1': 25,
         },
         income: {
-            'tt-Point': 10,
+            'tt-Point': 5,
         },
     },
     {
         name: 'tt-Scorer3',
         display: 'Taxi Driver',
-        title: 'Earns Benjamins and skims a lot off the top',
+        title: 'Earns Benjamins and skim a lot off the top',
         capacity: 0,
         cost: {
             'tt-Point': 100,
@@ -162,12 +162,7 @@ var Inventory;
                 if (capacity !== 0 && (count > 0 || canAfford)) {
                     SetReveal(thingName, true);
                 }
-                if (canAfford && (capacity === -1 || count < capacity)) {
-                    SetEnabled(thingName, true);
-                }
-                else {
-                    SetEnabled(thingName, false);
-                }
+                SetEnabled(thingName, IsEnabled(thingName));
             };
             purchaseCost.GetThingNames().forEach(function (needed) {
                 Inventory.GetCountEvent(needed).Register(callback);
@@ -311,8 +306,10 @@ var Inventory;
     }
     Inventory.SetEnabled = SetEnabled;
     function IsEnabled(thingName) {
-        var cost = new PurchaseCost(thingName);
-        return cost.CanAfford();
+        var canAfford = new PurchaseCost(thingName).CanAfford();
+        var count = GetCount(thingName);
+        var capacity = GetCapacity(thingName);
+        return canAfford && (capacity === -1 || count < capacity);
     }
     Inventory.IsEnabled = IsEnabled;
     // full game reset
@@ -414,6 +411,8 @@ function createInventory() {
 function createThingRow(thingName) {
     var outerDiv = document.createElement('div');
     outerDiv.className = 'row';
+    outerDiv.style.display = 'flex';
+    outerDiv.style.alignItems = 'center';
     var toUnregister = [];
     var unregisterMe = function (callback) { return toUnregister.push(callback); };
     outerDiv.appendChild(createName(thingName));
@@ -437,7 +436,6 @@ function createCountDiv(thingName, unregisterMe) {
     var count = Inventory.GetCount(thingName);
     var updateCount = function (count) { return currentDiv.innerText = count.toString(); };
     updateCount(count);
-    // TODO: make sure this gets unregistered
     Inventory.GetCountEvent(thingName).Register(updateCount);
     unregisterMe(function () { return Inventory.GetCountEvent(thingName).Unregister(updateCount); });
     countDiv.appendChild(currentDiv);

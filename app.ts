@@ -9,19 +9,19 @@ resetButton.addEventListener('click', resetEverything, false);
 // - add automation thing you can buy A-Tomato-Meter
 // - make game editable from inside the game
 // - display income
-// - confirm on reset or have an undo
 // - floating text that highlights progress
 // - give shoutouts to people who have helped - special thanks to Oppositions for that suggestion
+// - - thesamelabel for helping me get flex working
+// - - mistamadd001 suggested keg capacities with microbreweries
 // - make achievements for karbz0ne
 // - work on simulating the game so I know how long things take
 // - auto-generating game definitions
 // - fix capacity not turning off as it should when the game is reset
-// - fix the numeric display so it looks fine with larger numbers
 // - fractional income support
-// - progress bars for Keg Delivery Guy progress
-// - make 0 no longer mean unlimited capacity
 // - enforce display ordering so reloading the page doesn't change the order
-// - mistamadd001 suggested keg capacities with microbreweries
+// - highlights when a button is hovered
+// - make text vertically centered
+// - come up with better display of rapidly increasing things
 
 interface SaveThingInfo {
     Count: number;
@@ -76,16 +76,16 @@ var definitions = <ThingType[]>[
             'tt-FixedPrice1': 25,
         },
         capacityEffect: {
-            'tt-PointHolder1': 50,
+            'tt-PointHolder1': 25,
         },
         income: {
-            'tt-Point': 10,
+            'tt-Point': 5,
         },
     },
     {
         name: 'tt-Scorer3',
         display: 'Taxi Driver',
-        title: 'Earns Benjamins and skims a lot off the top',
+        title: 'Earns Benjamins and skim a lot off the top',
         capacity: 0,
         cost: {
             'tt-Point': 100,
@@ -214,12 +214,7 @@ module Inventory {
                     SetReveal(thingName, true);
                 }
 
-                if (canAfford && (capacity === -1 || count < capacity)) {
-                    SetEnabled(thingName, true);
-                }
-                else {
-                    SetEnabled(thingName, false);
-                }
+                SetEnabled(thingName, IsEnabled(thingName));
             }
 
             purchaseCost.GetThingNames().forEach(needed => {
@@ -390,8 +385,12 @@ module Inventory {
     }
 
     export function IsEnabled(thingName: string) {
-        var cost = new PurchaseCost(thingName);
-        return cost.CanAfford();
+        var canAfford = new PurchaseCost(thingName).CanAfford();
+
+        var count = GetCount(thingName);
+        var capacity = GetCapacity(thingName);
+
+        return canAfford && (capacity === -1 || count < capacity)
     }
 
     // full game reset
@@ -516,6 +515,8 @@ function createInventory() {
 function createThingRow(thingName: string) {
     var outerDiv = document.createElement('div');
     outerDiv.className = 'row';
+    outerDiv.style.display = 'flex';
+    outerDiv.style.alignItems = 'center';
 
     var toUnregister: { (): void }[] = [];
     var unregisterMe = callback => toUnregister.push(callback);
@@ -550,7 +551,6 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
     var updateCount = (count:number) => currentDiv.innerText = count.toString();
     updateCount(count);
 
-    // TODO: make sure this gets unregistered
     Inventory.GetCountEvent(thingName).Register(updateCount);
     unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateCount));
 

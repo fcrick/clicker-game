@@ -4,5 +4,5 @@
 *.user
 bin
 obj
-*.config
 *.map
+.vs/config/applicationhost.config

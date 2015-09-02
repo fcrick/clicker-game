@@ -9,7 +9,6 @@ resetButton.addEventListener('click', resetEverything, false);
 // - make game editable from inside the game
 //   - fix remaining event bugs
 //   - hook up events for anything missing them
-//   - class that represents a thing type so I have a place to hook events
 //   - switching to a more explicit component architecture
 
 // - add automation thing you can buy A-Tomato-Meter
@@ -227,16 +226,16 @@ var definitions = <ThingType[]>[
 module Inventory {
 
     export function Initialize() {
-        definitions.forEach(thingType => {
-            var thingName = thingType.name;
-            var cost = thingType.cost;
+        Object.keys(entityByName).forEach(thingName => {
+            var entity = entityByName[thingName];
+            var cost = entity.Cost.Get();
             var count = GetCount(thingName);
 
             if (!cost || count > 0) {
                 SetReveal(thingName, true);
             }
 
-            var purchaseCost = new PurchaseCost(thingType.name);
+            var purchaseCost = new PurchaseCost(thingName);
             var callback = c => {
                 var capacity = GetCapacity(thingName);
                 var canAfford = purchaseCost.CanAfford();
@@ -264,7 +263,7 @@ module Inventory {
                 SetCapacityShown(thingName, true);
             }
 
-            var capacityEffect = thingType.capacityEffect;
+            var capacityEffect = entity.CapacityEffect.Get();
             if (!capacityEffect)
                 return;
 
@@ -435,14 +434,12 @@ module Inventory {
 
     // full game reset
     export function Reset() {
-        definitions.forEach(thingType => {
-            var thingName = thingType.name;
-            SetCount(thingName, 0);
-        });
+        var names = Object.keys(entityByName);
+        names.forEach(thingName => SetCount(thingName, 0));
 
-        definitions.forEach(thingType => {
-            var thingName = thingType.name;
-            SetReveal(thingName, !thingType.cost); // this should also check capacity
+        names.forEach(thingName => {
+            // TODO: this should also check capacity
+            SetReveal(thingName, !entityByName[thingName].Cost.Get()); 
             SetCapacityShown(thingName, false);
         });
     }
@@ -568,9 +565,7 @@ function getButtonText(thingName) {
 var cellClass = 'col-sm-2';
 
 function createInventory() {
-    definitions.forEach(thingType => {
-        var thingName = thingType.name;
-
+    Object.keys(entityByName).forEach(thingName => {
         if (Inventory.IsRevealed(thingName)) {
             createThingRow(thingName);
         }
@@ -764,8 +759,8 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
 class PurchaseCost {
     private costTable: { [index: string]: number; };
 
-    constructor(public ThingToBuy: string) {
-        this.costTable = definitions.filter(item => item.name === this.ThingToBuy)[0].cost;
+    constructor(public thingName: string) {
+        this.costTable = entityByName[thingName].Cost.Get();
         if (!this.costTable) {
             this.costTable = {};
         }
@@ -791,12 +786,12 @@ class PurchaseCost {
         if (!cost)
             return 0;
 
-        var ratio = entityByName[this.ThingToBuy].CostRatio.Get();
+        var ratio = entityByName[this.thingName].CostRatio.Get();
         if (!ratio) {
             ratio = 1.15;
         }
 
-        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.ThingToBuy)));
+        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.thingName)));
     }
 }
 
@@ -841,9 +836,9 @@ function initializeSaveData() {
         stuff = saveData.Stuff = {};
     }
 
-    definitions.forEach(function (thingType) {
-        if (!stuff[thingType.name]) {
-            stuff[thingType.name] = {
+    Object.keys(entityByName).forEach(thingName => {
+        if (!stuff[thingName]) {
+            stuff[thingName] = {
                 Count: 0,
                 IsRevealed: false,
                 IsCapShown: false,
@@ -853,9 +848,10 @@ function initializeSaveData() {
 }
 
 function onInterval() {
-    definitions.forEach(function (typeDef) {
-        var income = typeDef.income;
-        var count = Inventory.GetCount(typeDef.name);
+    Object.keys(entityByName).forEach(thingName => {
+        var entity = entityByName[thingName];
+        var income = entity.Income.Get();
+        var count = Inventory.GetCount(thingName);
         if (income && count) {
             Object.keys(income).forEach(earnedName => {
                 Inventory.ChangeCount(earnedName, income[earnedName] * count);

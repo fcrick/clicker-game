@@ -171,14 +171,14 @@ var definitions = [
 var Inventory;
 (function (Inventory) {
     function Initialize() {
-        definitions.forEach(function (thingType) {
-            var thingName = thingType.name;
-            var cost = thingType.cost;
+        Object.keys(entityByName).forEach(function (thingName) {
+            var entity = entityByName[thingName];
+            var cost = entity.Cost.Get();
             var count = GetCount(thingName);
             if (!cost || count > 0) {
                 SetReveal(thingName, true);
             }
-            var purchaseCost = new PurchaseCost(thingType.name);
+            var purchaseCost = new PurchaseCost(thingName);
             var callback = function (c) {
                 var capacity = GetCapacity(thingName);
                 var canAfford = purchaseCost.CanAfford();
@@ -198,7 +198,7 @@ var Inventory;
             if (capacity !== -1 && GetCount(thingName) >= capacity) {
                 SetCapacityShown(thingName, true);
             }
-            var capacityEffect = thingType.capacityEffect;
+            var capacityEffect = entity.CapacityEffect.Get();
             if (!capacityEffect)
                 return;
             Object.keys(capacityEffect).forEach(function (affectedName) {
@@ -345,13 +345,11 @@ var Inventory;
     Inventory.IsEnabled = IsEnabled;
     // full game reset
     function Reset() {
-        definitions.forEach(function (thingType) {
-            var thingName = thingType.name;
-            SetCount(thingName, 0);
-        });
-        definitions.forEach(function (thingType) {
-            var thingName = thingType.name;
-            SetReveal(thingName, !thingType.cost); // this should also check capacity
+        var names = Object.keys(entityByName);
+        names.forEach(function (thingName) { return SetCount(thingName, 0); });
+        names.forEach(function (thingName) {
+            // TODO: this should also check capacity
+            SetReveal(thingName, !entityByName[thingName].Cost.Get());
             SetCapacityShown(thingName, false);
         });
     }
@@ -457,8 +455,7 @@ function getButtonText(thingName) {
 }
 var cellClass = 'col-sm-2';
 function createInventory() {
-    definitions.forEach(function (thingType) {
-        var thingName = thingType.name;
+    Object.keys(entityByName).forEach(function (thingName) {
         if (Inventory.IsRevealed(thingName)) {
             createThingRow(thingName);
         }
@@ -596,10 +593,9 @@ function createButton(thingName, unregisterMe) {
     return buttonDiv;
 }
 var PurchaseCost = (function () {
-    function PurchaseCost(ThingToBuy) {
-        var _this = this;
-        this.ThingToBuy = ThingToBuy;
-        this.costTable = definitions.filter(function (item) { return item.name === _this.ThingToBuy; })[0].cost;
+    function PurchaseCost(thingName) {
+        this.thingName = thingName;
+        this.costTable = entityByName[thingName].Cost.Get();
         if (!this.costTable) {
             this.costTable = {};
         }
@@ -622,11 +618,11 @@ var PurchaseCost = (function () {
         var cost = this.costTable[thingName];
         if (!cost)
             return 0;
-        var ratio = entityByName[this.ThingToBuy].CostRatio.Get();
+        var ratio = entityByName[this.thingName].CostRatio.Get();
         if (!ratio) {
             ratio = 1.15;
         }
-        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.ThingToBuy)));
+        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.thingName)));
     };
     return PurchaseCost;
 })();
@@ -661,9 +657,9 @@ function initializeSaveData() {
     if (!stuff) {
         stuff = saveData.Stuff = {};
     }
-    definitions.forEach(function (thingType) {
-        if (!stuff[thingType.name]) {
-            stuff[thingType.name] = {
+    Object.keys(entityByName).forEach(function (thingName) {
+        if (!stuff[thingName]) {
+            stuff[thingName] = {
                 Count: 0,
                 IsRevealed: false,
                 IsCapShown: false,
@@ -672,9 +668,10 @@ function initializeSaveData() {
     });
 }
 function onInterval() {
-    definitions.forEach(function (typeDef) {
-        var income = typeDef.income;
-        var count = Inventory.GetCount(typeDef.name);
+    Object.keys(entityByName).forEach(function (thingName) {
+        var entity = entityByName[thingName];
+        var income = entity.Income.Get();
+        var count = Inventory.GetCount(thingName);
         if (income && count) {
             Object.keys(income).forEach(function (earnedName) {
                 Inventory.ChangeCount(earnedName, income[earnedName] * count);

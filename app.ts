@@ -53,19 +53,19 @@ interface ThingType {
     progressThing?: string; // value is name of thing to show percentage of
 }
 
-class EntityType {
+class Entity {
     constructor(private tt: ThingType) {
-        this.Display = new Events.Property(() => this.tt.display, value => this.tt.display = value);
+        this.Display = new Property(() => this.tt.display, value => this.tt.display = value);
     }
 
     public GetName() {
         return this.tt.name;
     }
 
-    public Display: Events.Property<string>;
+    public Display: Property<string>;
 }
 
-module EntityType {
+module Entity {
     export interface CountCallback { (count: number, previous: number): void; };
 }
 
@@ -440,11 +440,11 @@ module Inventory {
     interface ToggleCallback { (toggled: boolean): void; };
 
     class ThingEvent<T> {
-        private eventTable: { [thingName: string]: Events.GameEvent<T> } = {};
-        public GetEvent(thingName: string): Events.IGameEvent<T> {
+        private eventTable: { [thingName: string]: GameEvent<T> } = {};
+        public GetEvent(thingName: string): IGameEvent<T> {
             var event = this.eventTable[thingName];
             if (!event) {
-                event = this.eventTable[thingName] = new Events.GameEvent<T>();
+                event = this.eventTable[thingName] = new GameEvent<T>();
             }
 
             return event;
@@ -479,65 +479,63 @@ module Inventory {
     var enabledTable: { [index: string]: boolean } = {};
 }
 
-module Events {
-    export interface IGameEvent<T> {
-        Register: (callback: T) => void;
-        Unregister: (callback: T) => void;
-    }
-
-    export class GameEvent<T> implements IGameEvent<T> {
-        callbacks: T[] = [];
-
-        public Register(callback: T) {
-            this.callbacks.push(callback);
-        }
-
-        public Unregister(callback: T) {
-            var index = this.callbacks.indexOf(callback);
-
-            if (index === -1) {
-                return false;
-            }
-
-            this.callbacks.splice(index, 1);
-            return true;
-        }
-
-        public Fire(caller: (callback: T) => void) {
-            this.callbacks.forEach(callback => caller(callback));
-        }
-    }
-
-    export class Property<T> {
-        private current: T;
-        private event: GameEvent<{ (current: T, previous: T): void }>;
-
-        constructor(private getter: () => T, private setter: (value: T) => void) {
-            this.current = getter();
-        }
-
-        public Get(): T {
-            return this.current;
-        }
-
-        public Set(value: T) {
-            if (this.current === value) {
-                return;
-            }
-
-            var previous = this.current;
-            this.setter(value);
-            this.current = value;
-            this.event.Fire(callback => callback(value, previous));
-        }
-
-        public Event() {
-            return this.event;
-        }
-    }
-
-    export class StringProperty extends Property<string> { }
+interface IGameEvent<T> {
+    Register: (callback: T) => void;
+    Unregister: (callback: T) => void;
 }
+
+class GameEvent<T> implements IGameEvent<T> {
+    callbacks: T[] = [];
+
+    public Register(callback: T) {
+        this.callbacks.push(callback);
+    }
+
+    public Unregister(callback: T) {
+        var index = this.callbacks.indexOf(callback);
+
+        if (index === -1) {
+            return false;
+        }
+
+        this.callbacks.splice(index, 1);
+        return true;
+    }
+
+    public Fire(caller: (callback: T) => void) {
+        this.callbacks.forEach(callback => caller(callback));
+    }
+}
+
+class Property<T> {
+    private current: T;
+    private event: GameEvent<{ (current: T, previous: T): void }>;
+
+    constructor(private getter: () => T, private setter: (value: T) => void) {
+        this.current = getter();
+    }
+
+    public Get(): T {
+        return this.current;
+    }
+
+    public Set(value: T) {
+        if (this.current === value) {
+            return;
+        }
+
+        var previous = this.current;
+        this.setter(value);
+        this.current = value;
+        this.event.Fire(callback => callback(value, previous));
+    }
+
+    public Event() {
+        return this.event;
+    }
+}
+
+class StringProperty extends Property<string> { }
 
 function getButtonText(thingName) {
     var thingType = defByName[thingName];

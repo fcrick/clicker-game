@@ -9,21 +9,21 @@ var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
 ;
 var saveData;
-var EntityType = (function () {
-    function EntityType(tt) {
+var Entity = (function () {
+    function Entity(tt) {
         var _this = this;
         this.tt = tt;
-        this.Display = new Events.Property(function () { return _this.tt.display; }, function (value) { return _this.tt.display = value; });
+        this.Display = new Property(function () { return _this.tt.display; }, function (value) { return _this.tt.display = value; });
     }
-    EntityType.prototype.GetName = function () {
+    Entity.prototype.GetName = function () {
         return this.tt.name;
     };
-    return EntityType;
+    return Entity;
 })();
-var EntityType;
-(function (EntityType) {
+var Entity;
+(function (Entity) {
     ;
-})(EntityType || (EntityType = {}));
+})(Entity || (Entity = {}));
 var definitions = [
     {
         name: 'tt-Point',
@@ -362,7 +362,7 @@ var Inventory;
         ThingEvent.prototype.GetEvent = function (thingName) {
             var event = this.eventTable[thingName];
             if (!event) {
-                event = this.eventTable[thingName] = new Events.GameEvent();
+                event = this.eventTable[thingName] = new GameEvent();
             }
             return event;
         };
@@ -390,62 +390,56 @@ var Inventory;
     Inventory.GetShowCapacityEvent = function (thingName) { return showCapacityEvent.GetEvent(thingName); };
     var enabledTable = {};
 })(Inventory || (Inventory = {}));
-var Events;
-(function (Events) {
-    var GameEvent = (function () {
-        function GameEvent() {
-            this.callbacks = [];
+var GameEvent = (function () {
+    function GameEvent() {
+        this.callbacks = [];
+    }
+    GameEvent.prototype.Register = function (callback) {
+        this.callbacks.push(callback);
+    };
+    GameEvent.prototype.Unregister = function (callback) {
+        var index = this.callbacks.indexOf(callback);
+        if (index === -1) {
+            return false;
         }
-        GameEvent.prototype.Register = function (callback) {
-            this.callbacks.push(callback);
-        };
-        GameEvent.prototype.Unregister = function (callback) {
-            var index = this.callbacks.indexOf(callback);
-            if (index === -1) {
-                return false;
-            }
-            this.callbacks.splice(index, 1);
-            return true;
-        };
-        GameEvent.prototype.Fire = function (caller) {
-            this.callbacks.forEach(function (callback) { return caller(callback); });
-        };
-        return GameEvent;
-    })();
-    Events.GameEvent = GameEvent;
-    var Property = (function () {
-        function Property(getter, setter) {
-            this.getter = getter;
-            this.setter = setter;
-            this.current = getter();
+        this.callbacks.splice(index, 1);
+        return true;
+    };
+    GameEvent.prototype.Fire = function (caller) {
+        this.callbacks.forEach(function (callback) { return caller(callback); });
+    };
+    return GameEvent;
+})();
+var Property = (function () {
+    function Property(getter, setter) {
+        this.getter = getter;
+        this.setter = setter;
+        this.current = getter();
+    }
+    Property.prototype.Get = function () {
+        return this.current;
+    };
+    Property.prototype.Set = function (value) {
+        if (this.current === value) {
+            return;
         }
-        Property.prototype.Get = function () {
-            return this.current;
-        };
-        Property.prototype.Set = function (value) {
-            if (this.current === value) {
-                return;
-            }
-            var previous = this.current;
-            this.setter(value);
-            this.current = value;
-            this.event.Fire(function (callback) { return callback(value, previous); });
-        };
-        Property.prototype.Event = function () {
-            return this.event;
-        };
-        return Property;
-    })();
-    Events.Property = Property;
-    var StringProperty = (function (_super) {
-        __extends(StringProperty, _super);
-        function StringProperty() {
-            _super.apply(this, arguments);
-        }
-        return StringProperty;
-    })(Property);
-    Events.StringProperty = StringProperty;
-})(Events || (Events = {}));
+        var previous = this.current;
+        this.setter(value);
+        this.current = value;
+        this.event.Fire(function (callback) { return callback(value, previous); });
+    };
+    Property.prototype.Event = function () {
+        return this.event;
+    };
+    return Property;
+})();
+var StringProperty = (function (_super) {
+    __extends(StringProperty, _super);
+    function StringProperty() {
+        _super.apply(this, arguments);
+    }
+    return StringProperty;
+})(Property);
 function getButtonText(thingName) {
     var thingType = defByName[thingName];
     var cost = new PurchaseCost(thingName);

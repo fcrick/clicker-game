@@ -14,16 +14,21 @@ var Entity = (function () {
         var _this = this;
         this.tt = tt;
         this.Display = new Property(function () { return _this.tt.display; }, function (value) { return _this.tt.display = value; });
+        this.Title = new Property(function () { return _this.tt.title; }, function (value) { return _this.tt.display = value; });
+        this.Cost = new Property(function () { return _this.tt.cost; }, function (value) { return _this.tt.cost = value; });
+        this.Capacity = new Property(function () { return _this.tt.capacity; }, function (value) { return _this.tt.capacity = value; });
+        this.Income = new Property(function () { return _this.tt.income; }, function (value) { return _this.tt.income = value; });
+        this.CapacityEffect = new Property(function () { return _this.tt.capacityEffect; }, function (value) { return _this.tt.capacityEffect = value; });
+        this.CostRatio = new Property(function () { return _this.tt.costRatio; }, function (value) { return _this.tt.costRatio = value; });
+        this.ZeroAtCapacity = new Property(function () { return _this.tt.zeroAtCapacity; }, function (value) { return _this.tt.zeroAtCapacity = value; });
+        this.IncomeWhenZeroed = new Property(function () { return _this.tt.incomeWhenZeroed; }, function (value) { return _this.tt.incomeWhenZeroed = value; });
+        this.ProgressThing = new Property(function () { return _this.tt.progressThing; }, function (value) { return _this.tt.progressThing = value; });
     }
     Entity.prototype.GetName = function () {
         return this.tt.name;
     };
     return Entity;
 })();
-var Entity;
-(function (Entity) {
-    ;
-})(Entity || (Entity = {}));
 var definitions = [
     {
         name: 'tt-Point',
@@ -163,8 +168,6 @@ var definitions = [
         }
     },
 ];
-var defByName = {};
-definitions.forEach(function (thingType) { return defByName[thingType.name] = thingType; });
 var Inventory;
 (function (Inventory) {
     function Initialize() {
@@ -689,4 +692,8 @@ function onLoad() {
 }
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
+var defByName = {};
+definitions.forEach(function (thingType) { return defByName[thingType.name] = thingType; });
+var entityByName = {};
+definitions.forEach(function (thingType) { return entityByName[thingType.name] = new Entity(thingType); });
 //# sourceMappingURL=app.js.map

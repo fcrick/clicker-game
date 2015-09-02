@@ -56,6 +56,15 @@ interface ThingType {
 class Entity {
     constructor(private tt: ThingType) {
         this.Display = new Property(() => this.tt.display, value => this.tt.display = value);
+        this.Title = new Property(() => this.tt.title, value => this.tt.display = value);
+        this.Cost = new Property(() => this.tt.cost, value => this.tt.cost = value);
+        this.Capacity = new Property(() => this.tt.capacity, value => this.tt.capacity = value);
+        this.Income = new Property(() => this.tt.income, value => this.tt.income = value);
+        this.CapacityEffect = new Property(() => this.tt.capacityEffect, value => this.tt.capacityEffect = value);
+        this.CostRatio = new Property(() => this.tt.costRatio, value => this.tt.costRatio = value);
+        this.ZeroAtCapacity = new Property(() => this.tt.zeroAtCapacity, value => this.tt.zeroAtCapacity = value);
+        this.IncomeWhenZeroed = new Property(() => this.tt.incomeWhenZeroed, value => this.tt.incomeWhenZeroed = value);
+        this.ProgressThing = new Property(() => this.tt.progressThing, value => this.tt.progressThing = value);
     }
 
     public GetName() {
@@ -63,10 +72,15 @@ class Entity {
     }
 
     public Display: Property<string>;
-}
-
-module Entity {
-    export interface CountCallback { (count: number, previous: number): void; };
+    public Title: Property<string>;
+    public Cost: Property<{ [index: string]: number }>;
+    public Capacity: Property<number>;
+    public Income: Property<{ [index: string]: number }>;
+    public CapacityEffect: Property<{ [index: string]: number }>;
+    public CostRatio: Property<number>;
+    public ZeroAtCapacity: Property<boolean>;
+    public IncomeWhenZeroed: Property<{ [index: string]: number }>;
+    public ProgressThing: Property<string>;
 }
 
 var definitions = <ThingType[]>[
@@ -209,8 +223,6 @@ var definitions = <ThingType[]>[
     },
 ];
 
-var defByName: { [index: string]: ThingType } = {};
-definitions.forEach(thingType => defByName[thingType.name] = thingType);
 
 module Inventory {
 
@@ -867,3 +879,9 @@ function onLoad() {
 
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
+
+var defByName: { [index: string]: ThingType } = {};
+definitions.forEach(thingType => defByName[thingType.name] = thingType);
+
+var entityByName: { [index: string]: Entity } = {};
+definitions.forEach(thingType => entityByName[thingType.name] = new Entity(thingType));

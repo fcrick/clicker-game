@@ -1,8 +1,29 @@
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    __.prototype = b.prototype;
+    d.prototype = new __();
+};
 var resetButton = document.getElementById("resetButton");
 var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
 ;
 var saveData;
+var EntityType = (function () {
+    function EntityType(tt) {
+        var _this = this;
+        this.tt = tt;
+        this.Display = new Events.Property(function () { return _this.tt.display; }, function (value) { return _this.tt.display = value; });
+    }
+    EntityType.prototype.GetName = function () {
+        return this.tt.name;
+    };
+    return EntityType;
+})();
+var EntityType;
+(function (EntityType) {
+    ;
+})(EntityType || (EntityType = {}));
 var definitions = [
     {
         name: 'tt-Point',
@@ -392,6 +413,38 @@ var Events;
         return GameEvent;
     })();
     Events.GameEvent = GameEvent;
+    var Property = (function () {
+        function Property(getter, setter) {
+            this.getter = getter;
+            this.setter = setter;
+            this.current = getter();
+        }
+        Property.prototype.Get = function () {
+            return this.current;
+        };
+        Property.prototype.Set = function (value) {
+            if (this.current === value) {
+                return;
+            }
+            var previous = this.current;
+            this.setter(value);
+            this.current = value;
+            this.event.Fire(function (callback) { return callback(value, previous); });
+        };
+        Property.prototype.Event = function () {
+            return this.event;
+        };
+        return Property;
+    })();
+    Events.Property = Property;
+    var StringProperty = (function (_super) {
+        __extends(StringProperty, _super);
+        function StringProperty() {
+            _super.apply(this, arguments);
+        }
+        return StringProperty;
+    })(Property);
+    Events.StringProperty = StringProperty;
 })(Events || (Events = {}));
 function getButtonText(thingName) {
     var thingType = defByName[thingName];

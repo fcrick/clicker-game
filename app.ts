@@ -8,7 +8,7 @@ resetButton.addEventListener('click', resetEverything, false);
 // TODO:
 // - make game editable from inside the game
 //   - fix remaining event bugs
-//   - hook up events for enything missing them
+//   - hook up events for anything missing them
 //   - class that represents a thing type so I have a place to hook events
 //   - switching to a more explicit component architecture
 
@@ -51,6 +51,22 @@ interface ThingType {
     zeroAtCapacity?: boolean;
     incomeWhenZeroed?: { [index: string]: number };
     progressThing?: string; // value is name of thing to show percentage of
+}
+
+class EntityType {
+    constructor(private tt: ThingType) {
+        this.Display = new Events.Property(() => this.tt.display, value => this.tt.display = value);
+    }
+
+    public GetName() {
+        return this.tt.name;
+    }
+
+    public Display: Events.Property<string>;
+}
+
+module EntityType {
+    export interface CountCallback { (count: number, previous: number): void; };
 }
 
 var definitions = <ThingType[]>[
@@ -491,6 +507,36 @@ module Events {
             this.callbacks.forEach(callback => caller(callback));
         }
     }
+
+    export class Property<T> {
+        private current: T;
+        private event: GameEvent<{ (current: T, previous: T): void }>;
+
+        constructor(private getter: () => T, private setter: (value: T) => void) {
+            this.current = getter();
+        }
+
+        public Get(): T {
+            return this.current;
+        }
+
+        public Set(value: T) {
+            if (this.current === value) {
+                return;
+            }
+
+            var previous = this.current;
+            this.setter(value);
+            this.current = value;
+            this.event.Fire(callback => callback(value, previous));
+        }
+
+        public Event() {
+            return this.event;
+        }
+    }
+
+    export class StringProperty extends Property<string> { }
 }
 
 function getButtonText(thingName) {

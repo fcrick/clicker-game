@@ -329,11 +329,11 @@ module Inventory {
     }
 
     function capacityUpdate(thingName: string, count: number, capacity: number) {
-        var thingType = defByName[thingName];
+        var entity = entityByName[thingName];
 
-        if (thingType.zeroAtCapacity && count >= capacity) {
+        if (entity.ZeroAtCapacity.Get() && count >= capacity) {
             SetCount(thingName, 0);
-            var income = thingType.incomeWhenZeroed;
+            var income = entity.IncomeWhenZeroed.Get();
             if (income) {
                 Object.keys(income).forEach(earnedThing => {
                     ChangeCount(earnedThing, income[earnedThing]);
@@ -348,7 +348,7 @@ module Inventory {
     }
 
     export function SetReveal(thingName: string, revealed: boolean) {
-        if (!defByName[thingName].display) {
+        if (!entityByName[thingName].Display.Get()) {
             return;
         }
 
@@ -362,7 +362,7 @@ module Inventory {
     }
 
     export function IsRevealed(thingName: string) {
-        if (!defByName[thingName].display) {
+        if (!entityByName[thingName].Display.Get()) {
             return false;
         }
 
@@ -373,24 +373,25 @@ module Inventory {
         var baseCapacity = 0;
         var capacityDelta = 0;
 
-        var thingType = defByName[thingName]
+        var entity = entityByName[thingName]
 
-        var capacity = thingType.capacity
+        var capacity = entity.Capacity.Get();
         if (capacity === -1) {
             return -1;
         }
 
-        baseCapacity = thingType.capacity;
+        baseCapacity = capacity;
 
         // TODO: make not wasteful
-        definitions.forEach(thingType => {
-            var capacityEffect = thingType.capacityEffect;
+        Object.keys(entityByName).forEach(affecterName => {
+            var entity = entityByName[affecterName];
+            var capacityEffect = entity.CapacityEffect.Get();
             if (!capacityEffect) {
                 return;
             }
 
-            var effect = thingType.capacityEffect[thingName];
-            var count = Inventory.GetCount(thingType.name);
+            var effect = capacityEffect[thingName];
+            var count = Inventory.GetCount(entity.GetName());
             if (effect && count) {
                 capacityDelta += effect * count;
             }
@@ -550,16 +551,18 @@ class Property<T> {
 class StringProperty extends Property<string> { }
 
 function getButtonText(thingName) {
-    var thingType = defByName[thingName];
+    var entity = entityByName[thingName];
 
     var cost = new PurchaseCost(thingName);
-    var costString = cost.GetThingNames().map(name => cost.GetCost(name) + ' ' + defByName[name].display).join(', ');
+    var costString = cost.GetThingNames().map(name =>
+        cost.GetCost(name) + ' ' + entityByName[name].Display.Get()
+    ).join(', ');
 
     if (!costString) {
         costString = "FREE!";
     }
 
-    return 'Buy a ' + thingType.display + ' for ' + costString;
+    return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
 }
 
 var cellClass = 'col-sm-2';
@@ -682,15 +685,15 @@ function removeCapacity(thingName: string, countDiv: HTMLDivElement) {
 }
 
 function createName(thingName: string) {
-    var display = defByName[thingName].display;
+    var entity = entityByName[thingName];
+    var display = entity.Display.Get();
 
     var nameDiv = document.createElement('div');
 
     nameDiv.innerText = display;
     nameDiv.className = cellClass;
-
-    var thingType = defByName[thingName];
-    var progressThing = thingType.progressThing;
+    
+    var progressThing = entity.ProgressThing.Get();
 
     if (progressThing) {
         var progressDiv = document.createElement('div');
@@ -727,12 +730,12 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
 
-    var thingType = defByName[thingName];
+    var entity = entityByName[thingName];
 
     var buyButton = document.createElement('button');
     var id = buyButton.id = 'buy-' + thingName;
 
-    var title = thingType.title;
+    var title = entity.Title.Get();
     if (title) {
         buyButton.title = title;
     }
@@ -788,7 +791,7 @@ class PurchaseCost {
         if (!cost)
             return 0;
 
-        var ratio = defByName[this.ThingToBuy].costRatio;
+        var ratio = entityByName[this.ThingToBuy].CostRatio.Get();
         if (!ratio) {
             ratio = 1.15;
         }
@@ -879,9 +882,6 @@ function onLoad() {
 
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
-
-var defByName: { [index: string]: ThingType } = {};
-definitions.forEach(thingType => defByName[thingType.name] = thingType);
 
 var entityByName: { [index: string]: Entity } = {};
 definitions.forEach(thingType => entityByName[thingType.name] = new Entity(thingType));

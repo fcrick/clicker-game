@@ -255,10 +255,10 @@ var Inventory;
     }
     Inventory.SetCount = SetCount;
     function capacityUpdate(thingName, count, capacity) {
-        var thingType = defByName[thingName];
-        if (thingType.zeroAtCapacity && count >= capacity) {
+        var entity = entityByName[thingName];
+        if (entity.ZeroAtCapacity.Get() && count >= capacity) {
             SetCount(thingName, 0);
-            var income = thingType.incomeWhenZeroed;
+            var income = entity.IncomeWhenZeroed.Get();
             if (income) {
                 Object.keys(income).forEach(function (earnedThing) {
                     ChangeCount(earnedThing, income[earnedThing]);
@@ -271,7 +271,7 @@ var Inventory;
         }
     }
     function SetReveal(thingName, revealed) {
-        if (!defByName[thingName].display) {
+        if (!entityByName[thingName].Display.Get()) {
             return;
         }
         var current = saveData.Stuff[thingName].IsRevealed;
@@ -283,7 +283,7 @@ var Inventory;
     }
     Inventory.SetReveal = SetReveal;
     function IsRevealed(thingName) {
-        if (!defByName[thingName].display) {
+        if (!entityByName[thingName].Display.Get()) {
             return false;
         }
         return saveData.Stuff[thingName].IsRevealed;
@@ -292,20 +292,21 @@ var Inventory;
     function GetCapacity(thingName) {
         var baseCapacity = 0;
         var capacityDelta = 0;
-        var thingType = defByName[thingName];
-        var capacity = thingType.capacity;
+        var entity = entityByName[thingName];
+        var capacity = entity.Capacity.Get();
         if (capacity === -1) {
             return -1;
         }
-        baseCapacity = thingType.capacity;
+        baseCapacity = capacity;
         // TODO: make not wasteful
-        definitions.forEach(function (thingType) {
-            var capacityEffect = thingType.capacityEffect;
+        Object.keys(entityByName).forEach(function (affecterName) {
+            var entity = entityByName[affecterName];
+            var capacityEffect = entity.CapacityEffect.Get();
             if (!capacityEffect) {
                 return;
             }
-            var effect = thingType.capacityEffect[thingName];
-            var count = Inventory.GetCount(thingType.name);
+            var effect = capacityEffect[thingName];
+            var count = Inventory.GetCount(entity.GetName());
             if (effect && count) {
                 capacityDelta += effect * count;
             }
@@ -444,13 +445,15 @@ var StringProperty = (function (_super) {
     return StringProperty;
 })(Property);
 function getButtonText(thingName) {
-    var thingType = defByName[thingName];
+    var entity = entityByName[thingName];
     var cost = new PurchaseCost(thingName);
-    var costString = cost.GetThingNames().map(function (name) { return cost.GetCost(name) + ' ' + defByName[name].display; }).join(', ');
+    var costString = cost.GetThingNames().map(function (name) {
+        return cost.GetCost(name) + ' ' + entityByName[name].Display.Get();
+    }).join(', ');
     if (!costString) {
         costString = "FREE!";
     }
-    return 'Buy a ' + thingType.display + ' for ' + costString;
+    return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
 }
 var cellClass = 'col-sm-2';
 function createInventory() {
@@ -540,12 +543,12 @@ function createCapacity(thingName, countDiv, unregisterMe) {
 function removeCapacity(thingName, countDiv) {
 }
 function createName(thingName) {
-    var display = defByName[thingName].display;
+    var entity = entityByName[thingName];
+    var display = entity.Display.Get();
     var nameDiv = document.createElement('div');
     nameDiv.innerText = display;
     nameDiv.className = cellClass;
-    var thingType = defByName[thingName];
-    var progressThing = thingType.progressThing;
+    var progressThing = entity.ProgressThing.Get();
     if (progressThing) {
         var progressDiv = document.createElement('div');
         progressDiv.className = 'progress progress-bar';
@@ -571,10 +574,10 @@ function createName(thingName) {
 function createButton(thingName, unregisterMe) {
     var buttonDiv = document.createElement('div');
     buttonDiv.className = cellClass;
-    var thingType = defByName[thingName];
+    var entity = entityByName[thingName];
     var buyButton = document.createElement('button');
     var id = buyButton.id = 'buy-' + thingName;
-    var title = thingType.title;
+    var title = entity.Title.Get();
     if (title) {
         buyButton.title = title;
     }
@@ -619,7 +622,7 @@ var PurchaseCost = (function () {
         var cost = this.costTable[thingName];
         if (!cost)
             return 0;
-        var ratio = defByName[this.ThingToBuy].costRatio;
+        var ratio = entityByName[this.ThingToBuy].CostRatio.Get();
         if (!ratio) {
             ratio = 1.15;
         }
@@ -692,8 +695,6 @@ function onLoad() {
 }
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
-var defByName = {};
-definitions.forEach(function (thingType) { return defByName[thingType.name] = thingType; });
 var entityByName = {};
 definitions.forEach(function (thingType) { return entityByName[thingType.name] = new Entity(thingType); });
 //# sourceMappingURL=app.js.map

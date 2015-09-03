@@ -8,7 +8,6 @@ resetButton.addEventListener('click', resetEverything, false);
 // TODO:
 // - make game editable from inside the game
 //   - hook up events for anything missing them
-//     - update capacity when capacities change
 //   - switching to a more explicit component architecture
 
 // - add automation thing you can buy A-Tomato-Meter
@@ -925,7 +924,6 @@ function resetEverything() {
 }
 
 function save() {
-    // how about we remember how many cookies you have in browser local storage?
     localStorage['SaveData'] = JSON.stringify(saveData);
 }
 

@@ -713,7 +713,6 @@ function resetEverything() {
     save();
 }
 function save() {
-    // how about we remember how many cookies you have in browser local storage?
     localStorage['SaveData'] = JSON.stringify(saveData);
 }
 function initializeSaveData() {

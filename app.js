@@ -41,16 +41,26 @@ var Entity = (function () {
         }
         return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
     };
+    Entity.prototype.UpdateButtonText = function () {
+        this.ButtonText.Set(this.getButtonText(this.GetName()));
+    };
     Entity.prototype.setUpButtonText = function () {
         var _this = this;
         this.ButtonText = new Property(function () { return _this.buttonText; }, function (value) { _this.buttonText = value; });
-        var update = function () { return _this.ButtonText.Set(_this.getButtonText(_this.GetName())); };
-        update();
+        var updateButtonText = function () { return _this.UpdateButtonText(); };
+        updateButtonText();
         // change of name to this entity
-        this.Display.Event().Register(function (current, previous) { return update(); });
+        this.Display.Event().Register(updateButtonText);
         // change of name to anything in the cost of the entity
+        var cost = this.Cost.Get();
+        if (cost) {
+            Object.keys(cost).forEach(function (costName) {
+                var costEntity = entityByName[costName].Display.Event().Register(updateButtonText);
+            });
+        }
         // change of cost composition
         // change of the cost amounts
+        this.Cost.Event().Register(updateButtonText);
     };
     return Entity;
 })();
@@ -106,6 +116,7 @@ var definitions = [
         capacity: 50,
         cost: {
             'tt-Point': 25,
+            'tt-Scorer1': 1,
         },
         capacityEffect: {
             'tt-Point': 10,
@@ -198,47 +209,82 @@ var Inventory;
     function Initialize() {
         Object.keys(entityByName).forEach(function (thingName) {
             var entity = entityByName[thingName];
-            var cost = entity.Cost.Get();
-            var count = GetCount(thingName);
-            if (!cost || count > 0) {
-                SetReveal(thingName, true);
-            }
-            var purchaseCost = new PurchaseCost(thingName);
-            var callback = function (c) {
-                var capacity = GetCapacity(thingName);
-                var canAfford = purchaseCost.CanAfford();
+            var registerCostEvents = function () {
+                var events = [];
+                var cost = entity.Cost.Get();
                 var count = GetCount(thingName);
-                if (capacity !== 0 && (count > 0 || canAfford)) {
+                if (!cost || count > 0) {
                     SetReveal(thingName, true);
                 }
-                SetEnabled(thingName, IsEnabled(thingName));
+                var purchaseCost = new PurchaseCost(thingName);
+                var callback = function () {
+                    var capacity = GetCapacity(thingName);
+                    var canAfford = purchaseCost.CanAfford();
+                    var count = GetCount(thingName);
+                    if (capacity !== 0 && (count > 0 || canAfford)) {
+                        SetReveal(thingName, true);
+                    }
+                    SetEnabled(thingName, IsEnabled(thingName));
+                };
+                purchaseCost.GetThingNames().forEach(function (needed) {
+                    events.push(Inventory.GetCountEvent(needed).Register(callback));
+                });
+                events.push(Inventory.GetCountEvent(thingName).Register(callback));
+                events.push(Inventory.GetCapacityEvent(thingName).Register(callback));
+                callback();
+                if (events.length > 0) {
+                    costEventMap[thingName] = events;
+                }
             };
-            purchaseCost.GetThingNames().forEach(function (needed) {
-                Inventory.GetCountEvent(needed).Register(callback);
+            registerCostEvents();
+            entity.Cost.Event().Register(function (capacityEffects) {
+                costEventMap[thingName].forEach(function (unreg) { return unreg(); });
+                delete costEventMap[thingName];
+                registerCostEvents();
             });
-            Inventory.GetCountEvent(thingName).Register(callback);
-            Inventory.GetCapacityEvent(thingName).Register(callback);
-            callback(GetCount(thingName));
+            // update button text when count changes
+            Inventory.GetCountEvent(thingName).Register(function () { return entity.UpdateButtonText(); });
+            // set up for changing whether capacity is displayed
             var capacity = GetCapacity(thingName);
             if (capacity !== -1 && GetCount(thingName) >= capacity) {
                 SetCapacityShown(thingName, true);
             }
-            var capacityEffect = entity.CapacityEffect.Get();
-            if (!capacityEffect)
-                return;
-            Object.keys(capacityEffect).forEach(function (affectedName) {
-                var effect = capacityEffect[affectedName];
-                if (effect) {
-                    var callback = function (count) {
-                        var capacity = Inventory.GetCapacity(affectedName);
-                        capacityEvent.FireEvent(affectedName, function (callback) { return callback(capacity); });
-                    };
-                    Inventory.GetCountEvent(thingName).Register(callback);
+            // set up for changing capacity display
+            var registerCapacityEvents = function () {
+                var events = [];
+                Object.keys(capacityEffect).forEach(function (affectedName) {
+                    var effect = capacityEffect[affectedName];
+                    if (effect) {
+                        var callback = function (count) {
+                            var capacity = Inventory.GetCapacity(affectedName);
+                            capacityEvent.FireEvent(affectedName, function (callback) { return callback(capacity); });
+                        };
+                        var unregCallback = Inventory.GetCountEvent(thingName).Register(callback);
+                        events.push(unregCallback);
+                    }
+                });
+                if (events.length > 0) {
+                    capacityEventMap[thingName] = events;
                 }
+            };
+            var capacityEffect = entity.CapacityEffect.Get();
+            if (capacityEffect) {
+                registerCapacityEvents();
+            }
+            entity.CapacityEffect.Event().Register(function (capacityEffects) {
+                capacityEventMap[thingName].forEach(function (unreg) { return unreg(); });
+                delete capacityEventMap[thingName];
+                registerCapacityEvents();
+                Object.keys(capacityEffects).forEach(function (affectedName) {
+                    capacity = Inventory.GetCapacity(affectedName);
+                    capacityEvent.FireEvent(affectedName, function (callback) { return callback(capacity); });
+                });
             });
         });
     }
     Inventory.Initialize = Initialize;
+    var capacityEventMap = {};
+    var costEventMap = {};
     function GetCount(thingName) {
         return saveData.Stuff[thingName].Count;
     }
@@ -554,14 +600,14 @@ function createCapacity(thingName, countDiv, unregisterMe) {
     unregRemoveCapacity = Inventory.GetShowCapacityEvent(thingName).Register(removeCapacity);
     unregisterMe(unregRemoveCapacity);
 }
-function removeCapacity(thingName, countDiv) {
-}
 function createName(thingName, unregisterMe) {
     var entity = entityByName[thingName];
     var display = entity.Display.Get();
     var nameDiv = document.createElement('div');
     nameDiv.innerText = display;
     nameDiv.className = cellClass;
+    // change text when display changes
+    unregisterMe(entity.Display.Event().Register(function (newName) { return nameDiv.innerText = newName; }));
     // logic for making the label move from left to right
     // like a progress bar
     var progressThing = entity.ProgressThing.Get();
@@ -597,6 +643,9 @@ function createButton(thingName, unregisterMe) {
     if (title) {
         buyButton.title = title;
     }
+    unregisterMe(entity.Title.Event().Register(function (newTitle) {
+        buyButton.title = newTitle;
+    }));
     var updateButton = function () { return buyButton.innerText = entity.ButtonText.Get(); };
     updateButton();
     unregisterMe(Inventory.GetCountEvent(thingName).Register(updateButton));

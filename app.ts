@@ -53,19 +53,6 @@ interface ThingType {
 }
 
 class Entity {
-    constructor(private tt: ThingType) {
-        this.Display = new Property(() => this.tt.display, value => this.tt.display = value);
-        this.Title = new Property(() => this.tt.title, value => this.tt.display = value);
-        this.Cost = new Property(() => this.tt.cost, value => this.tt.cost = value);
-        this.Capacity = new Property(() => this.tt.capacity, value => this.tt.capacity = value);
-        this.Income = new Property(() => this.tt.income, value => this.tt.income = value);
-        this.CapacityEffect = new Property(() => this.tt.capacityEffect, value => this.tt.capacityEffect = value);
-        this.CostRatio = new Property(() => this.tt.costRatio, value => this.tt.costRatio = value);
-        this.ZeroAtCapacity = new Property(() => this.tt.zeroAtCapacity, value => this.tt.zeroAtCapacity = value);
-        this.IncomeWhenZeroed = new Property(() => this.tt.incomeWhenZeroed, value => this.tt.incomeWhenZeroed = value);
-        this.ProgressThing = new Property(() => this.tt.progressThing, value => this.tt.progressThing = value);
-    }
-
     public GetName() {
         return this.tt.name;
     }
@@ -80,6 +67,58 @@ class Entity {
     public ZeroAtCapacity: Property<boolean>;
     public IncomeWhenZeroed: Property<{ [index: string]: number }>;
     public ProgressThing: Property<string>;
+
+    // derivative properties
+    public ButtonText: Property<string>;
+
+    constructor(private tt: ThingType) {
+        this.Display = new Property(() => this.tt.display, value => this.tt.display = value);
+        this.Title = new Property(() => this.tt.title, value => this.tt.display = value);
+        this.Cost = new Property(() => this.tt.cost, value => this.tt.cost = value);
+        this.Capacity = new Property(() => this.tt.capacity, value => this.tt.capacity = value);
+        this.Income = new Property(() => this.tt.income, value => this.tt.income = value);
+        this.CapacityEffect = new Property(() => this.tt.capacityEffect, value => this.tt.capacityEffect = value);
+        this.CostRatio = new Property(() => this.tt.costRatio, value => this.tt.costRatio = value);
+        this.ZeroAtCapacity = new Property(() => this.tt.zeroAtCapacity, value => this.tt.zeroAtCapacity = value);
+        this.IncomeWhenZeroed = new Property(() => this.tt.incomeWhenZeroed, value => this.tt.incomeWhenZeroed = value);
+        this.ProgressThing = new Property(() => this.tt.progressThing, value => this.tt.progressThing = value);
+    }
+
+    public Initialize() {
+        this.setUpButtonText();
+    }
+
+    getButtonText(thingName) {
+        var entity = entityByName[thingName];
+
+        var cost = new PurchaseCost(thingName);
+        var costString = cost.GetThingNames().map(name =>
+            cost.GetCost(name) + ' ' + entityByName[name].Display.Get()
+            ).join(', ');
+
+        if (!costString) {
+            costString = "FREE!";
+        }
+
+        return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
+    }
+
+    private buttonText: string;
+
+    private setUpButtonText() {
+        this.ButtonText = new Property(() => this.buttonText, value => { this.buttonText = value; });
+
+        var update = () => this.ButtonText.Set(this.getButtonText(this.GetName()));
+        update();
+
+        // change of name to this entity
+        this.Display.Event().Register((current, previous) => update());
+
+        // change of name to anything in the cost of the entity
+
+        // change of cost composition
+        // change of the cost amounts
+    }
 }
 
 var definitions = <ThingType[]>[
@@ -519,10 +558,11 @@ class GameEvent<T> implements IGameEvent<T> {
 
 class Property<T> {
     private current: T;
-    private event: GameEvent<{ (current: T, previous: T): void }>;
+    private event: GameEvent<Property.Change<T>>;
 
-    constructor(private getter: () => T, private setter: (value: T) => void) {
+    constructor(private getter: Property.Get<T>, private setter: Property.Set<T>) {
         this.current = getter();
+        this.event = new GameEvent<Property.Change<T>>();
     }
 
     public Get(): T {
@@ -545,22 +585,21 @@ class Property<T> {
     }
 }
 
-class StringProperty extends Property<string> { }
-
-function getButtonText(thingName) {
-    var entity = entityByName[thingName];
-
-    var cost = new PurchaseCost(thingName);
-    var costString = cost.GetThingNames().map(name =>
-        cost.GetCost(name) + ' ' + entityByName[name].Display.Get()
-    ).join(', ');
-
-    if (!costString) {
-        costString = "FREE!";
+module Property {
+    export interface Change<T> {
+        (current: T, previous: T): void;
     }
 
-    return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
+    export interface Get<T> {
+        (): T;
+    }
+
+    export interface Set<T> {
+        (value: T): void;
+    }
 }
+
+class StringProperty extends Property<string> { }
 
 var cellClass = 'col-sm-2';
 
@@ -735,11 +774,14 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
         buyButton.title = title;
     }
 
-    var updateButton: (count?: number) => void = () => buyButton.innerText = getButtonText(thingName);
+    var updateButton = () => buyButton.innerText = entity.ButtonText.Get();
     updateButton();
 
     Inventory.GetCountEvent(thingName).Register(updateButton);
     unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateButton));
+
+    entity.ButtonText.Event().Register(updateButton);
+    unregisterMe(() => entity.ButtonText.Event().Unregister(updateButton));
 
     var enableDisableButton = (enabled) => buyButton.disabled = !enabled;
     Inventory.GetEnableEvent(thingName).Register(enableDisableButton);
@@ -869,8 +911,9 @@ function onLoad() {
     catch (e) { }
 
     initializeSaveData();
+    Object.keys(entityByName).forEach(thingName => entityByName[thingName].Initialize());
+
     Inventory.Initialize();
-    
     createInventory();
 
     setInterval(onInterval, 200);
@@ -881,3 +924,7 @@ window.onload = onLoad;
 
 var entityByName: { [index: string]: Entity } = {};
 definitions.forEach(thingType => entityByName[thingType.name] = new Entity(thingType));
+
+// for debugging
+var entities: { [index: string]: Entity } = {};
+Object.keys(entityByName).forEach(thingName => entities[entityByName[thingName].Display.Get()] = entityByName[thingName]);

@@ -27,6 +27,31 @@ var Entity = (function () {
     Entity.prototype.GetName = function () {
         return this.tt.name;
     };
+    Entity.prototype.Initialize = function () {
+        this.setUpButtonText();
+    };
+    Entity.prototype.getButtonText = function (thingName) {
+        var entity = entityByName[thingName];
+        var cost = new PurchaseCost(thingName);
+        var costString = cost.GetThingNames().map(function (name) {
+            return cost.GetCost(name) + ' ' + entityByName[name].Display.Get();
+        }).join(', ');
+        if (!costString) {
+            costString = "FREE!";
+        }
+        return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
+    };
+    Entity.prototype.setUpButtonText = function () {
+        var _this = this;
+        this.ButtonText = new Property(function () { return _this.buttonText; }, function (value) { _this.buttonText = value; });
+        var update = function () { return _this.ButtonText.Set(_this.getButtonText(_this.GetName())); };
+        update();
+        // change of name to this entity
+        this.Display.Event().Register(function (current, previous) { return update(); });
+        // change of name to anything in the cost of the entity
+        // change of cost composition
+        // change of the cost amounts
+    };
     return Entity;
 })();
 var definitions = [
@@ -417,6 +442,7 @@ var Property = (function () {
         this.getter = getter;
         this.setter = setter;
         this.current = getter();
+        this.event = new GameEvent();
     }
     Property.prototype.Get = function () {
         return this.current;
@@ -442,17 +468,6 @@ var StringProperty = (function (_super) {
     }
     return StringProperty;
 })(Property);
-function getButtonText(thingName) {
-    var entity = entityByName[thingName];
-    var cost = new PurchaseCost(thingName);
-    var costString = cost.GetThingNames().map(function (name) {
-        return cost.GetCost(name) + ' ' + entityByName[name].Display.Get();
-    }).join(', ');
-    if (!costString) {
-        costString = "FREE!";
-    }
-    return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
-}
 var cellClass = 'col-sm-2';
 function createInventory() {
     Object.keys(entityByName).forEach(function (thingName) {
@@ -578,10 +593,12 @@ function createButton(thingName, unregisterMe) {
     if (title) {
         buyButton.title = title;
     }
-    var updateButton = function () { return buyButton.innerText = getButtonText(thingName); };
+    var updateButton = function () { return buyButton.innerText = entity.ButtonText.Get(); };
     updateButton();
     Inventory.GetCountEvent(thingName).Register(updateButton);
     unregisterMe(function () { return Inventory.GetCountEvent(thingName).Unregister(updateButton); });
+    entity.ButtonText.Event().Register(updateButton);
+    unregisterMe(function () { return entity.ButtonText.Event().Unregister(updateButton); });
     var enableDisableButton = function (enabled) { return buyButton.disabled = !enabled; };
     Inventory.GetEnableEvent(thingName).Register(enableDisableButton);
     unregisterMe(function () { return Inventory.GetEnableEvent(thingName).Unregister(enableDisableButton); });
@@ -686,6 +703,7 @@ function onLoad() {
     }
     catch (e) { }
     initializeSaveData();
+    Object.keys(entityByName).forEach(function (thingName) { return entityByName[thingName].Initialize(); });
     Inventory.Initialize();
     createInventory();
     setInterval(onInterval, 200);
@@ -694,4 +712,7 @@ function onLoad() {
 window.onload = onLoad;
 var entityByName = {};
 definitions.forEach(function (thingType) { return entityByName[thingType.name] = new Entity(thingType); });
+// for debugging
+var entities = {};
+Object.keys(entityByName).forEach(function (thingName) { return entities[entityByName[thingName].Display.Get()] = entityByName[thingName]; });
 //# sourceMappingURL=app.js.map

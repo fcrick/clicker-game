@@ -292,7 +292,6 @@ module Inventory {
             });
 
             GetCountEvent(thingName).Register(callback);
-
             GetCapacityEvent(thingName).Register(callback);
 
             callback(GetCount(thingName));
@@ -529,15 +528,16 @@ module Inventory {
 }
 
 interface IGameEvent<T> {
-    Register: (callback: T) => void;
+    Register: (callback: T) => () => void;
     Unregister: (callback: T) => void;
 }
 
 class GameEvent<T> implements IGameEvent<T> {
     callbacks: T[] = [];
 
-    public Register(callback: T) {
+    public Register(callback: T): () => void {
         this.callbacks.push(callback);
+        return () => this.Unregister(callback);
     }
 
     public Unregister(callback: T) {
@@ -628,9 +628,11 @@ function createThingRow(thingName: string) {
     var toUnregister: { (): void }[] = [];
     var unregisterMe = callback => toUnregister.push(callback);
 
-    outerDiv.appendChild(createName(thingName));
+    outerDiv.appendChild(createName(thingName, unregisterMe));
     outerDiv.appendChild(createCountDiv(thingName, unregisterMe));
     outerDiv.appendChild(createButton(thingName, unregisterMe));
+
+    var unregHideThingRow: () => void;
 
     var hideThingRow = (revealed: boolean) => {
         if (revealed) {
@@ -638,11 +640,11 @@ function createThingRow(thingName: string) {
         }
 
         outerDiv.parentElement.removeChild(outerDiv);
-        Inventory.GetRevealEvent(thingName).Unregister(hideThingRow);
+        unregHideThingRow();
 
         toUnregister.forEach(unreg => unreg());
     };
-    Inventory.GetRevealEvent(thingName).Register(hideThingRow);
+    unregHideThingRow = Inventory.GetRevealEvent(thingName).Register(hideThingRow);
 
     document.getElementById('inventory').appendChild(outerDiv);
 }
@@ -659,8 +661,8 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
     var updateCount = (count:number) => currentDiv.innerText = count.toString();
     updateCount(count);
 
-    Inventory.GetCountEvent(thingName).Register(updateCount);
-    unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateCount));
+    var unregUpdateCount = Inventory.GetCountEvent(thingName).Register(updateCount);
+    unregisterMe(unregUpdateCount);
 
     countDiv.appendChild(currentDiv);
 
@@ -677,9 +679,8 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
 
         createCapacity(thingName, countDiv, unregisterMe);
     }
-    Inventory.GetShowCapacityEvent(thingName).Register(callback);
-    unregisterMe(() => Inventory.GetShowCapacityEvent(thingName).Unregister(callback));
-    
+    unregisterMe(Inventory.GetShowCapacityEvent(thingName).Register(callback));
+
     return countDiv;
 }
 
@@ -693,12 +694,13 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterM
     var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
     updateCapacity(Inventory.GetCapacity(thingName));
 
-    Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
-    var unregister = () => Inventory.GetCapacityEvent(thingName).Unregister(updateCapacity);
-    unregisterMe(unregister);
+    var unregUpdateCapacity = Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
+    unregisterMe(unregUpdateCapacity);
 
     var elements = [slashDiv, capacityDiv];
     elements.forEach(div => countDiv.appendChild(div));
+
+    var unregRemoveCapacity: () => void;
 
     var removeCapacity = (shown: boolean) => {
         if (shown) {
@@ -706,19 +708,19 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterM
         }
 
         elements.forEach(div => countDiv.removeChild(div));
-        unregister(); // remove event added above
-        Inventory.GetShowCapacityEvent(thingName).Unregister(removeCapacity);
+        unregUpdateCapacity(); // remove event added above
+        unregRemoveCapacity(); // remove this event handler
     }
 
-    Inventory.GetShowCapacityEvent(thingName).Register(removeCapacity);
-    unregisterMe(() => Inventory.GetShowCapacityEvent(thingName).Unregister(removeCapacity));
+    unregRemoveCapacity = Inventory.GetShowCapacityEvent(thingName).Register(removeCapacity);
+    unregisterMe(unregRemoveCapacity);
 }
 
 function removeCapacity(thingName: string, countDiv: HTMLDivElement) {
 
 }
 
-function createName(thingName: string) {
+function createName(thingName: string, unregisterMe: { (unreg: { (): void }): void }) {
     var entity = entityByName[thingName];
     var display = entity.Display.Get();
 
@@ -726,9 +728,10 @@ function createName(thingName: string) {
 
     nameDiv.innerText = display;
     nameDiv.className = cellClass;
-    
-    var progressThing = entity.ProgressThing.Get();
 
+    // logic for making the label move from left to right
+    // like a progress bar
+    var progressThing = entity.ProgressThing.Get();
     if (progressThing) {
         var progressDiv = document.createElement('div');
         progressDiv.className = 'progress progress-bar';
@@ -751,8 +754,8 @@ function createName(thingName: string) {
             progressDiv.style.width = percent + '%';
         };
 
-        Inventory.GetCountEvent(progressThing).Register(callback);
-        Inventory.GetCapacityEvent(progressThing).Register(callback);
+        unregisterMe(Inventory.GetCountEvent(progressThing).Register(callback));
+        unregisterMe(Inventory.GetCapacityEvent(progressThing).Register(callback));
 
         nameDiv.appendChild(progressDiv);
     }
@@ -777,15 +780,11 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
     var updateButton = () => buyButton.innerText = entity.ButtonText.Get();
     updateButton();
 
-    Inventory.GetCountEvent(thingName).Register(updateButton);
-    unregisterMe(() => Inventory.GetCountEvent(thingName).Unregister(updateButton));
-
-    entity.ButtonText.Event().Register(updateButton);
-    unregisterMe(() => entity.ButtonText.Event().Unregister(updateButton));
+    unregisterMe(Inventory.GetCountEvent(thingName).Register(updateButton));
+    unregisterMe(entity.ButtonText.Event().Register(updateButton));
 
     var enableDisableButton = (enabled) => buyButton.disabled = !enabled;
-    Inventory.GetEnableEvent(thingName).Register(enableDisableButton);
-    unregisterMe(() => Inventory.GetEnableEvent(thingName).Unregister(enableDisableButton));
+    unregisterMe(Inventory.GetEnableEvent(thingName).Register(enableDisableButton));
 
     enableDisableButton(Inventory.IsEnabled(thingName));
 

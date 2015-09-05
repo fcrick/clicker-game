@@ -803,16 +803,24 @@ function createName(thingName: string, unregisterMe: { (unreg: { (): void }): vo
             var current = Inventory.GetCount(progressThing);
             var max = Inventory.GetCapacity(progressThing);
 
-            var percent = (Math.floor(current / max * 700) / 10);
+            // makes progress go back and forth instead of filling
+            if (current < max / 2) {
+                var modCurrent = max / 2 - current;
+            }
+            else {
+                modCurrent = current - max / 2;
+            }
+
+            var percent = (Math.floor(modCurrent / max * 1400) / 10);
 
             // check if we're full
             var count = Inventory.GetCount(thingName);
             var capacity = Inventory.GetCapacity(thingName);
 
-            if (count === capacity) {
+            if (count === capacity || current === 0) {
                 percent = 0;
             }
-                
+
             progressDiv.style.width = percent + '%';
         };
 
@@ -1017,7 +1025,20 @@ function Add(display: string) {
 }
 
 function ReAddAll() {
-    definitions.forEach(thingType => thingType.name += 'Again');
-    var entities = definitions.map(thingType => new Entity(thingType));
+    var oldNames = definitions.map(thingType => thingType.name);
+
+    var newDefs = definitions.map(thingType => {
+        var originalName = thingType.name;
+
+        var json = JSON.stringify(thingType)
+
+        oldNames.forEach(oldName => {
+            var re = new RegExp('"' + oldName + '"', 'g');
+            json = json.replace(re, '"' + oldName + 'Again"');
+        });
+
+        return JSON.parse(json);
+    });
+    var entities = newDefs.map(thingType => new Entity(thingType));
     addNewEntities(entities);
 }

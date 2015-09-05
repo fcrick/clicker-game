@@ -788,5 +788,6 @@ function ReAddAll() {
     });
     var entities = newDefs.map(function (thingType) { return new Entity(thingType); });
     addNewEntities(entities);
+    definitions = newDefs;
 }
 //# sourceMappingURL=app.js.map

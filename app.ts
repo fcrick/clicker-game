@@ -1041,4 +1041,6 @@ function ReAddAll() {
     });
     var entities = newDefs.map(thingType => new Entity(thingType));
     addNewEntities(entities);
+
+    definitions = newDefs;
 }

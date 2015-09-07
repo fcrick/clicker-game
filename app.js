@@ -152,7 +152,8 @@ var definitions = [
         },
         capacityEffect: {
             'tt-FixedPrice1': 100,
-        }
+        },
+        progressThing: 'tt-FractionOfPointHolder4',
     },
     {
         name: 'tt-FixedPrice1',
@@ -195,6 +196,60 @@ var definitions = [
             'tt-FixedPrice1': 1,
         }
     },
+    {
+        name: 'tt-XpEarner',
+        capacity: -1,
+        display: "Macrobrewery",
+        income: {
+            'tt-Click': 1,
+        },
+        cost: {
+            'tt-Scorer2': 20,
+            'tt-PointHolder3': 10,
+            'tt-PointHolder4': 1,
+        },
+        capacityEffect: {
+            'tt-Click': 10000,
+        },
+    },
+    {
+        name: 'tt-Click',
+        capacity: 0,
+        display: "Click",
+    },
+    {
+        name: 'tt-Hero',
+        display: 'Hero',
+        capacity: -1,
+        cost: {
+            'tt-Click': 50,
+        },
+        income: {
+            'tt-FractionOfPointHolder4': 1,
+        },
+    },
+    {
+        name: 'tt-FractionOfPointHolder4',
+        capacity: 10000,
+        title: 'Made of clicks. Finds Piggy Banks.',
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-PointHolder4': 1,
+        }
+    },
+    {
+        name: 'tt-Scorer4',
+        display: 'Company',
+        title: 'Makes money',
+        capacity: -1,
+        cost: {
+            'tt-Hero': 20,
+        },
+        costRatio: 1.1,
+        income: {
+            'tt-FractionOfFixedPrice1': 1000,
+        }
+    },
 ];
 var Inventory;
 (function (Inventory) {
@@ -208,7 +263,8 @@ var Inventory;
             var events = [];
             var cost = entity.Cost.Get();
             var count = GetCount(thingName);
-            if (!cost || count > 0) {
+            var capacity = GetCapacity(thingName);
+            if ((!cost && capacity !== 0) || count > 0) {
                 SetReveal(thingName, true);
             }
             var purchaseCost = new PurchaseCost(thingName);
@@ -526,7 +582,7 @@ var thingRow = {
                                 var progressThing = entity.ProgressThing.Get();
                                 var current = Inventory.GetCount(progressThing);
                                 var capacity = Inventory.GetCapacity(progressThing);
-                                var percent = Math.floor(current / capacity * 700) / 10;
+                                var percent = Math.floor(current / capacity * 500) / 10;
                                 var thingName = entity.GetName();
                                 if (Inventory.GetCount(thingName) === Inventory.GetCapacity(thingName)) {
                                     percent = 0;

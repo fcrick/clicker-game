@@ -1,3 +1,4 @@
+/// <reference path="mithril.d.ts"/>
 var resetButton = document.getElementById("resetButton");
 var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
@@ -165,7 +166,6 @@ var definitions = [
         },
         capacity: 100,
         costRatio: 1,
-        progressThing: 'tt-FractionOfFixedPrice1',
     },
     {
         name: 'tt-PointHolderMaker1',
@@ -500,10 +500,7 @@ var Property = (function () {
     return Property;
 })();
 var cellClass = 'col-sm-2';
-function createInventory() {
-    Object.keys(entityByName).forEach(function (thingName) { return createInventoryForEntity(thingName); });
-}
-function createInventoryForEntity(thingName) {
+function createElementsForEntity(thingName) {
     if (Inventory.IsRevealed(thingName)) {
         createThingRow(thingName);
     }
@@ -514,141 +511,104 @@ function createInventoryForEntity(thingName) {
     };
     Inventory.GetRevealEvent(thingName).Register(create);
 }
+var thingRow = {
+    view: function (entity) {
+        // row
+        return m('.row', { style: { display: 'flex', alignItems: 'center' } }, [
+            // name
+            m('.col-sm-2', (function () {
+                var children = [];
+                if (entity.ProgressThing.Get()) {
+                    children.push(m('div', {
+                        class: 'progress progress-bar',
+                        style: {
+                            width: (function () {
+                                var progressThing = entity.ProgressThing.Get();
+                                var current = Inventory.GetCount(progressThing);
+                                var capacity = Inventory.GetCapacity(progressThing);
+                                var percent = Math.floor(current / capacity * 700) / 10;
+                                var thingName = entity.GetName();
+                                if (Inventory.GetCount(thingName) === Inventory.GetCapacity(thingName)) {
+                                    percent = 0;
+                                }
+                                return percent + '%';
+                            })(),
+                        },
+                    }));
+                }
+                children.push(entity.Display.Get());
+                return children;
+            })()),
+            // count
+            m('.col-sm-2', (function () {
+                var thingName = entity.GetName();
+                var children = [
+                    m('span', Inventory.GetCount(thingName))
+                ];
+                if (Inventory.IsCapacityShown(thingName)) {
+                    children.push(m('span', ' / '));
+                    children.push(m('span', Inventory.GetCapacity(thingName)));
+                }
+                return children;
+            })()),
+            // button
+            m('.col-sm-2', [
+                m('button', {
+                    title: entity.Title.Get(),
+                    class: 'btn btn-primary',
+                    disabled: !Inventory.IsEnabled(entity.GetName()),
+                    onclick: function () { return tryBuy(entity.GetName()); }
+                }, [
+                    entity.ButtonText.Get()
+                ]),
+            ]),
+        ]);
+    }
+};
 function createThingRow(thingName) {
     var outerDiv = document.createElement('div');
     outerDiv.className = 'row';
     outerDiv.style.display = 'flex';
     outerDiv.style.alignItems = 'center';
-    var toUnregister = [];
-    var unregisterMe = function (callback) { return toUnregister.push(callback); };
-    outerDiv.appendChild(createName(thingName, unregisterMe));
-    outerDiv.appendChild(createCountDiv(thingName, unregisterMe));
-    outerDiv.appendChild(createButton(thingName, unregisterMe));
-    var unregHideThingRow;
-    var hideThingRow = function (revealed) {
+    var inv = document.getElementById('inventory');
+    var newDiv = document.createElement('div');
+    inv.appendChild(newDiv);
+    var entity = entityByName[thingName];
+    var toUnload = [];
+    m.mount(newDiv, {
+        controller: function () {
+            onunload: (function (e) { return toUnload.forEach(function (u) { return u(); }); });
+        },
+        view: function () { return thingRow.view(entity); }
+    });
+    var redraw = function () { return m.redraw(); };
+    var u = function (unreg) { return toUnload.push(unreg); };
+    u(entity.Display.Event().Register(redraw));
+    u(entity.Capacity.Event().Register(redraw));
+    u(entity.CapacityEffect.Event().Register(redraw));
+    u(entity.Cost.Event().Register(redraw));
+    u(entity.CostRatio.Event().Register(redraw));
+    u(entity.Income.Event().Register(redraw));
+    u(entity.ProgressThing.Event().Register(redraw));
+    u(entity.Title.Event().Register(redraw));
+    u(entity.ZeroAtCapacity.Event().Register(redraw));
+    u(entity.ButtonText.Event().Register(redraw));
+    u(Inventory.GetCountEvent(thingName).Register(redraw));
+    u(Inventory.GetCapacityEvent(thingName).Register(redraw));
+    u(Inventory.GetShowCapacityEvent(thingName).Register(redraw));
+    // this is a bug
+    var progressThing = entity.ProgressThing.Get();
+    if (progressThing) {
+        u(Inventory.GetCountEvent(progressThing).Register(redraw));
+    }
+    var unregReveal;
+    unregReveal = Inventory.GetRevealEvent(thingName).Register(function (revealed) {
         if (revealed) {
             return;
         }
-        outerDiv.parentElement.removeChild(outerDiv);
-        unregHideThingRow();
-        toUnregister.forEach(function (unreg) { return unreg(); });
-    };
-    unregHideThingRow = Inventory.GetRevealEvent(thingName).Register(hideThingRow);
-    document.getElementById('inventory').appendChild(outerDiv);
-}
-function createCountDiv(thingName, unregisterMe) {
-    var countDiv = document.createElement('div');
-    countDiv.className = cellClass;
-    var currentDiv = document.createElement('span');
-    //currentDiv.id = 'current-' + thingName;
-    var count = Inventory.GetCount(thingName);
-    var updateCount = function (count) { return currentDiv.innerText = count.toString(); };
-    updateCount(count);
-    var unregUpdateCount = Inventory.GetCountEvent(thingName).Register(updateCount);
-    unregisterMe(unregUpdateCount);
-    countDiv.appendChild(currentDiv);
-    var capShown = Inventory.IsCapacityShown(thingName);
-    if (capShown) {
-        createCapacity(thingName, countDiv, unregisterMe);
-    }
-    // set up callback to show capacity display
-    var callback = function (show) {
-        if (!show) {
-            return;
-        }
-        createCapacity(thingName, countDiv, unregisterMe);
-    };
-    unregisterMe(Inventory.GetShowCapacityEvent(thingName).Register(callback));
-    return countDiv;
-}
-function createCapacity(thingName, countDiv, unregisterMe) {
-    var slashDiv = document.createElement('span');
-    slashDiv.innerText = ' / ';
-    var capacityDiv = document.createElement('span');
-    //capacityDiv.id = 'capacity-' + thingName;
-    var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
-    updateCapacity(Inventory.GetCapacity(thingName));
-    var unregUpdateCapacity = Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
-    unregisterMe(unregUpdateCapacity);
-    var elements = [slashDiv, capacityDiv];
-    elements.forEach(function (div) { return countDiv.appendChild(div); });
-    var unregRemoveCapacity;
-    var removeCapacity = function (shown) {
-        if (shown) {
-            return;
-        }
-        elements.forEach(function (div) { return countDiv.removeChild(div); });
-        unregUpdateCapacity(); // remove event added above
-        unregRemoveCapacity(); // remove this event handler
-    };
-    unregRemoveCapacity = Inventory.GetShowCapacityEvent(thingName).Register(removeCapacity);
-    unregisterMe(unregRemoveCapacity);
-}
-function createName(thingName, unregisterMe) {
-    var entity = entityByName[thingName];
-    var display = entity.Display.Get();
-    var nameDiv = document.createElement('div');
-    nameDiv.innerText = display;
-    nameDiv.className = cellClass;
-    // change text when display changes
-    unregisterMe(entity.Display.Event().Register(function (newName) { return nameDiv.innerText = newName; }));
-    // logic for making the label move from left to right
-    // like a progress bar
-    var progressThing = entity.ProgressThing.Get();
-    if (progressThing) {
-        var progressDiv = document.createElement('div');
-        progressDiv.className = 'progress progress-bar';
-        progressDiv.style.width = '0%';
-        var callback = function () {
-            var current = Inventory.GetCount(progressThing);
-            var max = Inventory.GetCapacity(progressThing);
-            // makes progress go back and forth instead of filling
-            if (current < max / 2) {
-                var modCurrent = max / 2 - current;
-            }
-            else {
-                modCurrent = current - max / 2;
-            }
-            var percent = (Math.floor(modCurrent / max * 1400) / 10);
-            // check if we're full
-            var count = Inventory.GetCount(thingName);
-            var capacity = Inventory.GetCapacity(thingName);
-            if (count === capacity || current === 0) {
-                percent = 0;
-            }
-            progressDiv.style.width = percent + '%';
-        };
-        unregisterMe(Inventory.GetCountEvent(progressThing).Register(callback));
-        unregisterMe(Inventory.GetCapacityEvent(progressThing).Register(callback));
-        nameDiv.appendChild(progressDiv);
-    }
-    return nameDiv;
-}
-function createButton(thingName, unregisterMe) {
-    var buttonDiv = document.createElement('div');
-    buttonDiv.className = cellClass;
-    var entity = entityByName[thingName];
-    var buyButton = document.createElement('button');
-    //var id = buyButton.id = 'buy-' + thingName;
-    var title = entity.Title.Get();
-    if (title) {
-        buyButton.title = title;
-    }
-    unregisterMe(entity.Title.Event().Register(function (newTitle) {
-        buyButton.title = newTitle;
-    }));
-    var updateButton = function () { return buyButton.innerText = entity.ButtonText.Get(); };
-    updateButton();
-    unregisterMe(Inventory.GetCountEvent(thingName).Register(updateButton));
-    unregisterMe(entity.ButtonText.Event().Register(updateButton));
-    var enableDisableButton = function (enabled) { return buyButton.disabled = !enabled; };
-    unregisterMe(Inventory.GetEnableEvent(thingName).Register(enableDisableButton));
-    enableDisableButton(Inventory.IsEnabled(thingName));
-    buyButton.classList.add('btn');
-    buyButton.classList.add('btn-primary');
-    buyButton.addEventListener('click', function () { tryBuy(thingName); });
-    buttonDiv.appendChild(buyButton);
-    return buttonDiv;
+        m.mount(newDiv, null);
+        unregReveal();
+    });
 }
 var PurchaseCost = (function () {
     function PurchaseCost(thingName) {
@@ -751,14 +711,14 @@ function addNewEntities(entities) {
     initializeSaveData();
     entities.forEach(function (entity) { return entity.Initialize(); });
     Inventory.Initialize(entities);
-    entities.forEach(function (entity) { return createInventoryForEntity(entity.GetName()); });
+    entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });
+    Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].Display.Get()] = entityByName[thingName]; });
 }
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
 var entityByName = {};
 // for debugging
-var entities = {};
-Object.keys(entityByName).forEach(function (thingName) { return entities[entityByName[thingName].Display.Get()] = entityByName[thingName]; });
+var things = {};
 var nextId = 1;
 function Add(display) {
     var newThingType = {

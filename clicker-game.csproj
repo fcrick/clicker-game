@@ -29,6 +29,7 @@
   </ItemGroup>
   <ItemGroup>
     <TypeScriptCompile Include="app.ts" />
+    <TypeScriptCompile Include="mithril.d.ts" />
   </ItemGroup>
   <ItemGroup>
     <None Include="web.Debug.config">

@@ -166,7 +166,6 @@ var definitions = [
         },
         capacity: 100,
         costRatio: 1,
-        progressThing: 'tt-FractionOfFixedPrice1',
     },
     {
         name: 'tt-PointHolderMaker1',

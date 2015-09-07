@@ -79,16 +79,16 @@ class Entity {
 
     constructor(tt: ThingType) {
         this.name = tt.name;
-        this.Display = new Property(() => tt.display);
-        this.Title = new Property(() => tt.title);
-        this.Cost = new Property(() => tt.cost);
-        this.Capacity = new Property(() => tt.capacity);
-        this.Income = new Property(() => tt.income);
-        this.CapacityEffect = new Property(() => tt.capacityEffect);
-        this.CostRatio = new Property(() => tt.costRatio);
-        this.ZeroAtCapacity = new Property(() => tt.zeroAtCapacity);
-        this.IncomeWhenZeroed = new Property(() => tt.incomeWhenZeroed);
-        this.ProgressThing = new Property(() => tt.progressThing);
+        this.Display = new Property(tt.display);
+        this.Title = new Property(tt.title);
+        this.Cost = new Property(tt.cost);
+        this.Capacity = new Property(tt.capacity);
+        this.Income = new Property(tt.income);
+        this.CapacityEffect = new Property(tt.capacityEffect);
+        this.CostRatio = new Property(tt.costRatio);
+        this.ZeroAtCapacity = new Property(tt.zeroAtCapacity);
+        this.IncomeWhenZeroed = new Property(tt.incomeWhenZeroed);
+        this.ProgressThing = new Property(tt.progressThing);
     }
 
     public Initialize() {
@@ -115,7 +115,7 @@ class Entity {
     }
 
     private setUpButtonText() {
-        this.ButtonText = new Property(() => '');
+        this.ButtonText = new Property('');
 
         var updateButtonText = () => this.UpdateButtonText();
         updateButtonText();
@@ -621,11 +621,9 @@ class GameEvent<T> implements IGameEvent<T> {
 }
 
 class Property<T> {
-    private current: T;
     private event: GameEvent<Property.Change<T>>;
 
-    constructor(getter: Property.Get<T>) {
-        this.current = getter();
+    constructor(private current: T) {
         this.event = new GameEvent<Property.Change<T>>();
     }
 

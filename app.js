@@ -500,10 +500,7 @@ var Property = (function () {
     return Property;
 })();
 var cellClass = 'col-sm-2';
-function createInventory() {
-    Object.keys(entityByName).forEach(function (thingName) { return createInventoryForEntity(thingName); });
-}
-function createInventoryForEntity(thingName) {
+function createElementsForEntity(thingName) {
     if (Inventory.IsRevealed(thingName)) {
         createThingRow(thingName);
     }
@@ -540,7 +537,6 @@ function createCountDiv(thingName, unregisterMe) {
     var countDiv = document.createElement('div');
     countDiv.className = cellClass;
     var currentDiv = document.createElement('span');
-    //currentDiv.id = 'current-' + thingName;
     var count = Inventory.GetCount(thingName);
     var updateCount = function (count) { return currentDiv.innerText = count.toString(); };
     updateCount(count);
@@ -565,7 +561,6 @@ function createCapacity(thingName, countDiv, unregisterMe) {
     var slashDiv = document.createElement('span');
     slashDiv.innerText = ' / ';
     var capacityDiv = document.createElement('span');
-    //capacityDiv.id = 'capacity-' + thingName;
     var updateCapacity = function (capacity) { return capacityDiv.innerText = capacity.toString(); };
     updateCapacity(Inventory.GetCapacity(thingName));
     var unregUpdateCapacity = Inventory.GetCapacityEvent(thingName).Register(updateCapacity);
@@ -629,7 +624,6 @@ function createButton(thingName, unregisterMe) {
     buttonDiv.className = cellClass;
     var entity = entityByName[thingName];
     var buyButton = document.createElement('button');
-    //var id = buyButton.id = 'buy-' + thingName;
     var title = entity.Title.Get();
     if (title) {
         buyButton.title = title;
@@ -751,7 +745,7 @@ function addNewEntities(entities) {
     initializeSaveData();
     entities.forEach(function (entity) { return entity.Initialize(); });
     Inventory.Initialize(entities);
-    entities.forEach(function (entity) { return createInventoryForEntity(entity.GetName()); });
+    entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });
 }
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;

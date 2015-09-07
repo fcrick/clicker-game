@@ -662,11 +662,7 @@ module Property {
 
 var cellClass = 'col-sm-2';
 
-function createInventory() {
-    Object.keys(entityByName).forEach(thingName => createInventoryForEntity(thingName));
-}
-
-function createInventoryForEntity(thingName: string) {
+function createElementsForEntity(thingName: string) {
     if (Inventory.IsRevealed(thingName)) {
         createThingRow(thingName);
     }
@@ -715,7 +711,6 @@ function createCountDiv(thingName: string, unregisterMe: { (unreg: { (): void })
     countDiv.className = cellClass;
 
     var currentDiv = document.createElement('span');
-    //currentDiv.id = 'current-' + thingName;
 
     var count = Inventory.GetCount(thingName);
 
@@ -750,7 +745,6 @@ function createCapacity(thingName: string, countDiv: HTMLDivElement, unregisterM
     slashDiv.innerText = ' / ';
 
     var capacityDiv = document.createElement('span');
-    //capacityDiv.id = 'capacity-' + thingName;
 
     var updateCapacity = capacity => capacityDiv.innerText = capacity.toString();
     updateCapacity(Inventory.GetCapacity(thingName));
@@ -838,7 +832,6 @@ function createButton(thingName: string, unregisterMe: { (unreg: { (): void }): 
     var entity = entityByName[thingName];
 
     var buyButton = document.createElement('button');
-    //var id = buyButton.id = 'buy-' + thingName;
 
     var title = entity.Title.Get();
     if (title) {
@@ -991,7 +984,7 @@ function addNewEntities(entities: Entity[]) {
     initializeSaveData();
     entities.forEach(entity => entity.Initialize());
     Inventory.Initialize(entities);
-    entities.forEach(entity => createInventoryForEntity(entity.GetName()));
+    entities.forEach(entity => createElementsForEntity(entity.GetName()));
 }
 
 // i think i need something that will fire when the page finished loading

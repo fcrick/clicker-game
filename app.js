@@ -6,16 +6,16 @@ var saveData;
 var Entity = (function () {
     function Entity(tt) {
         this.name = tt.name;
-        this.Display = new Property(function () { return tt.display; });
-        this.Title = new Property(function () { return tt.title; });
-        this.Cost = new Property(function () { return tt.cost; });
-        this.Capacity = new Property(function () { return tt.capacity; });
-        this.Income = new Property(function () { return tt.income; });
-        this.CapacityEffect = new Property(function () { return tt.capacityEffect; });
-        this.CostRatio = new Property(function () { return tt.costRatio; });
-        this.ZeroAtCapacity = new Property(function () { return tt.zeroAtCapacity; });
-        this.IncomeWhenZeroed = new Property(function () { return tt.incomeWhenZeroed; });
-        this.ProgressThing = new Property(function () { return tt.progressThing; });
+        this.Display = new Property(tt.display);
+        this.Title = new Property(tt.title);
+        this.Cost = new Property(tt.cost);
+        this.Capacity = new Property(tt.capacity);
+        this.Income = new Property(tt.income);
+        this.CapacityEffect = new Property(tt.capacityEffect);
+        this.CostRatio = new Property(tt.costRatio);
+        this.ZeroAtCapacity = new Property(tt.zeroAtCapacity);
+        this.IncomeWhenZeroed = new Property(tt.incomeWhenZeroed);
+        this.ProgressThing = new Property(tt.progressThing);
     }
     Entity.prototype.GetName = function () {
         return this.name;
@@ -39,7 +39,7 @@ var Entity = (function () {
     };
     Entity.prototype.setUpButtonText = function () {
         var _this = this;
-        this.ButtonText = new Property(function () { return ''; });
+        this.ButtonText = new Property('');
         var updateButtonText = function () { return _this.UpdateButtonText(); };
         updateButtonText();
         // change of name to this entity
@@ -479,8 +479,8 @@ var GameEvent = (function () {
     return GameEvent;
 })();
 var Property = (function () {
-    function Property(getter) {
-        this.current = getter();
+    function Property(current) {
+        this.current = current;
         this.event = new GameEvent();
     }
     Property.prototype.Get = function () {

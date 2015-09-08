@@ -487,35 +487,33 @@ class ThingViewModel {
 
 module Inventory {
     export function Initialize(entities: Entity[]) {
-        entities.forEach(entity => InitializeEntity(entity));
+        entities.forEach(entity => initializeEntity(entity));
     }
 
-    function InitializeEntity(entity: Entity) {
+    function initializeRevealEnabled(entity: Entity) {
+        if (!entity.Display.Get()) {
+            return;
+        }
+
+        var thingName = entity.GetName()
+        var purchaseCost = new PurchaseCost(thingName);
+
+        var count = GetCount(thingName);
+        if (count > 0 || GetCapacity(thingName) !== 0 && purchaseCost.CanAfford()) {
+            SetReveal(thingName, true);
+        }
+
+        SetEnabled(thingName, IsEnabled(thingName));
+    }
+
+    function initializeEntity(entity: Entity) {
         var thingName = entity.GetName();
 
         var registerCostEvents = () => {
             var events: { (): void }[] = [];
 
-            var cost = entity.Cost.Get();
-            var count = GetCount(thingName);
-            var capacity = GetCapacity(thingName)
-
-            if ((!cost && capacity !== 0) || count > 0) {
-                SetReveal(thingName, true);
-            }
-
             var purchaseCost = new PurchaseCost(thingName);
-            var callback = () => {
-                var capacity = GetCapacity(thingName);
-                var canAfford = purchaseCost.CanAfford();
-                var count = GetCount(thingName);
-
-                if (capacity !== 0 && (count > 0 || canAfford)) {
-                    SetReveal(thingName, true);
-                }
-
-                SetEnabled(thingName, IsEnabled(thingName));
-            }
+            var callback = () => initializeRevealEnabled(entity);
 
             purchaseCost.GetThingNames().forEach(needed => {
                 events.push(GetCountEvent(needed).Register(callback));
@@ -657,10 +655,6 @@ module Inventory {
     }
 
     export function SetReveal(thingName: string, revealed: boolean) {
-        if (!entityByName[thingName].Display.Get()) {
-            return;
-        }
-
         var current = saveData.Stuff[thingName].IsRevealed;
         if (current === revealed) {
             return;
@@ -749,9 +743,11 @@ module Inventory {
 
         names.forEach(thingName => {
             // TODO: this should also check capacity
-            SetReveal(thingName, !entityByName[thingName].Cost.Get()); 
+            SetReveal(thingName, false); 
             SetCapacityShown(thingName, false);
         });
+
+        names.forEach(thingName => initializeRevealEnabled(entityByName[thingName]));
     }
 
     // event callback interfaces

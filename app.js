@@ -371,29 +371,27 @@ var ThingViewModel = (function () {
 var Inventory;
 (function (Inventory) {
     function Initialize(entities) {
-        entities.forEach(function (entity) { return InitializeEntity(entity); });
+        entities.forEach(function (entity) { return initializeEntity(entity); });
     }
     Inventory.Initialize = Initialize;
-    function InitializeEntity(entity) {
+    function initializeRevealEnabled(entity) {
+        if (!entity.Display.Get()) {
+            return;
+        }
+        var thingName = entity.GetName();
+        var purchaseCost = new PurchaseCost(thingName);
+        var count = GetCount(thingName);
+        if (count > 0 || GetCapacity(thingName) !== 0 && purchaseCost.CanAfford()) {
+            SetReveal(thingName, true);
+        }
+        SetEnabled(thingName, IsEnabled(thingName));
+    }
+    function initializeEntity(entity) {
         var thingName = entity.GetName();
         var registerCostEvents = function () {
             var events = [];
-            var cost = entity.Cost.Get();
-            var count = GetCount(thingName);
-            var capacity = GetCapacity(thingName);
-            if ((!cost && capacity !== 0) || count > 0) {
-                SetReveal(thingName, true);
-            }
             var purchaseCost = new PurchaseCost(thingName);
-            var callback = function () {
-                var capacity = GetCapacity(thingName);
-                var canAfford = purchaseCost.CanAfford();
-                var count = GetCount(thingName);
-                if (capacity !== 0 && (count > 0 || canAfford)) {
-                    SetReveal(thingName, true);
-                }
-                SetEnabled(thingName, IsEnabled(thingName));
-            };
+            var callback = function () { return initializeRevealEnabled(entity); };
             purchaseCost.GetThingNames().forEach(function (needed) {
                 events.push(Inventory.GetCountEvent(needed).Register(callback));
             });
@@ -508,9 +506,6 @@ var Inventory;
         }
     }
     function SetReveal(thingName, revealed) {
-        if (!entityByName[thingName].Display.Get()) {
-            return;
-        }
         var current = saveData.Stuff[thingName].IsRevealed;
         if (current === revealed) {
             return;
@@ -586,9 +581,10 @@ var Inventory;
         names.forEach(function (thingName) { return SetCount(thingName, 0); });
         names.forEach(function (thingName) {
             // TODO: this should also check capacity
-            SetReveal(thingName, !entityByName[thingName].Cost.Get());
+            SetReveal(thingName, false);
             SetCapacityShown(thingName, false);
         });
+        names.forEach(function (thingName) { return initializeRevealEnabled(entityByName[thingName]); });
     }
     Inventory.Reset = Reset;
     ;

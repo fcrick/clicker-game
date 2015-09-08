@@ -15,6 +15,7 @@ resetButton.addEventListener('click', resetEverything, false);
 // - refactor PurchaseCost
 // - change Inventory to a class
 // - make reset reset everything including things now unknown
+// - make game save less often - 5 times per second is too much!
 
 // - add automation thing you can buy A-Tomato-Meter
 // - display income
@@ -301,6 +302,7 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-Hero',
         display: 'Hero',
+        title: 'Made of clicks. Finds Piggy Banks.',
         capacity: -1,
         cost: {
             'tt-Click': 50,
@@ -312,7 +314,6 @@ var definitions = <ThingType[]>[
     {
         name: 'tt-FractionOfPointHolder4',
         capacity: 10000,
-        title: 'Made of clicks. Finds Piggy Banks.',
         zeroAtCapacity: true,
         incomeWhenZeroed: {
             'tt-PointHolder4': 1,
@@ -333,6 +334,156 @@ var definitions = <ThingType[]>[
     },
 ];
 
+class ThingViewModelCollection {
+    private viewModels: { [thingName: string]: ThingViewModel } = {};
+
+    public AddEntities(entities: Entity[]) {
+        entities.forEach(entity => {
+            var thingName = entity.GetName();
+
+            if (Inventory.IsRevealed(thingName)) {
+                this.viewModels[thingName] = new ThingViewModel(entity);
+            }
+
+            Inventory.GetRevealEvent(thingName).Register((revealed: boolean) => {
+                if (!revealed || this.viewModels[thingName]) {
+                    return;
+                }
+
+                this.viewModels[thingName] = new ThingViewModel(entity);
+            });
+        });
+    }
+
+    public GetViewModels() {
+        return Object.keys(this.viewModels).map(key => this.viewModels[key]);
+    }
+
+    public GetViewModel(entity: Entity) {
+        return this.viewModels[entity.GetName()];
+    }
+}
+
+class ThingViewModel {
+    public DisplayText: Property<string>;
+    public Progress: Property<number>;
+
+    public Count: Property<number>;
+    public CapacityShown: Property<boolean>;
+    public Capacity: Property<number>;
+
+    public ButtonText: Property<string>;
+    public ButtonEnabled: Property<boolean>;
+    public ButtonTitle: Property<string>;
+
+    public Buy = () => tryBuy(this.entity.GetName());
+
+    constructor(private entity: Entity) {
+        this.thingName = entity.GetName();
+
+        // fill in initial values
+        this.DisplayText = new Property(entity.Display.Get());
+        this.Progress = new Property(this.calculateProgress());
+
+        this.Count = new Property(Inventory.GetCount(this.thingName));
+        this.CapacityShown = new Property(Inventory.IsCapacityShown(this.thingName));
+        this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
+
+        this.ButtonText = new Property(this.calculateButtonText());
+        this.ButtonEnabled = new Property(Inventory.IsEnabled(this.thingName));
+        this.ButtonTitle = new Property(entity.Title.Get());
+
+        this.setupEvents();
+    }
+
+    setupProgressEvent() {
+        // unregister previous count tracking event
+        if (this.progressUnreg) {
+            this.progressUnreg();
+            this.progressUnreg = null;
+        }
+
+        // register new one if need
+        var progressThing = this.entity.ProgressThing.Get();
+        if (progressThing) {
+            this.progressUnreg = Inventory.GetCountEvent(progressThing).Register(() => this.Progress.Set(this.calculateProgress()));
+            this.Progress.Set(this.calculateProgress());
+        }
+    }
+
+    setupButtonTextEvents() {
+        if (this.costUnregs) {
+            this.costUnregs.forEach(unreg => unreg());
+            this.costUnregs = [];
+        }
+
+        var u = (callback: () => void) => this.costUnregs.push(callback);
+
+        // change of name to anything in the cost of the entity
+        var cost = this.entity.Cost.Get();
+        if (cost) {
+            Object.keys(cost).forEach(costName => {
+                u(entityByName[costName].Display.Event().Register(() => this.calculateButtonText()));
+            });
+        }
+
+        u(this.entity.Cost.Event().Register(() => this.setupButtonTextEvents()));
+    }
+
+    setupEvents() {
+        var u = (callback: () => void) => this.unregs.push(callback);
+
+        // set up events so properties update correctly
+        u(this.entity.Display.Event().Register(newName => {
+            this.DisplayText.Set(newName);
+            this.ButtonText.Set(this.calculateButtonText());
+        }));
+
+        this.setupProgressEvent();
+
+        u(Inventory.GetCountEvent(this.thingName).Register(newCount => {
+            this.Count.Set(newCount);
+            this.ButtonText.Set(this.calculateButtonText());
+        }));
+
+        u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
+        u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
+
+        u(Inventory.GetEnableEvent(this.thingName).Register(newEnabled => this.ButtonEnabled.Set(newEnabled)));
+        u(this.entity.Title.Event().Register(newTitle => this.ButtonTitle.Set(newTitle)));
+    }
+
+    calculateProgress(): number {
+        var progressThing = this.entity.ProgressThing.Get();
+        if (!progressThing) {
+            return 0;
+        }
+
+        if (Inventory.GetCount(this.thingName) === Inventory.GetCapacity(this.thingName)) {
+            return 0;
+        }
+
+        return Inventory.GetCount(progressThing) / Inventory.GetCapacity(progressThing);
+    }
+
+    calculateButtonText(): string {
+        var cost = new PurchaseCost(this.thingName);
+        var costString = cost.GetThingNames().map(name =>
+            cost.GetCost(name) + ' ' + entityByName[name].Display.Get()
+            ).join(', ');
+
+        if (!costString) {
+            costString = "FREE!";
+        }
+
+        return 'Buy a ' + this.entity.Display.Get() + ' for ' + costString;
+    }
+
+    private thingName: string;
+    private unregs: { (): void }[] = [];
+    private progressUnreg: { (): void };
+    private costUnregs: { (): void }[] = [];
+}
 
 module Inventory {
     export function Initialize(entities: Entity[]) {
@@ -734,61 +885,32 @@ function createElementsForEntity(thingName: string) {
 }
 
 var thingRow = {
-    view: (entity: Entity) =>
+    view: (vm: ThingViewModel) =>
         // row
         m('.row', { style: { display: 'flex', alignItems: 'center' } }, [
             // name
-            m('.col-sm-2', (() => {
-                var children = [];
-                if (entity.ProgressThing.Get()) {
-                    children.push(m('div', {
-                        class: 'progress progress-bar',
-                        style: {
-                            width: (() => {
-                                var progressThing = entity.ProgressThing.Get();
-                                var current = Inventory.GetCount(progressThing);
-                                var capacity = Inventory.GetCapacity(progressThing);
-
-                                var percent = Math.floor(current / capacity * 500) / 10;
-                                var thingName = entity.GetName();
-
-                                if (Inventory.GetCount(thingName) === Inventory.GetCapacity(thingName)) {
-                                    percent = 0;
-                                }
-
-                                return percent + '%';
-                            })(),
-                        },
-                    }));
-                }
-
-                children.push(entity.Display.Get());
-
-                return children;
-            })()),
+            m('.col-sm-2', [
+                m('div', {
+                    class: 'progress progress-bar',
+                    style: { width: Math.floor(vm.Progress.Get() * 500) / 10 + '%' },
+                }),
+                vm.DisplayText.Get()
+            ]),
             // count
-            m('.col-sm-2', (() => {
-                var thingName = entity.GetName();
-                var children = [
-                    m('span', Inventory.GetCount(thingName))
-                ];
-
-                if (Inventory.IsCapacityShown(thingName)) {
-                    children.push(m('span', ' / '));
-                    children.push(m('span', Inventory.GetCapacity(thingName)));
-                }
-
-                return children;
-            })()),
+            m('.col-sm-2', [
+                m('span', vm.Count.Get()),
+                vm.CapacityShown.Get() ? m('span', ' / ') : '',
+                vm.CapacityShown.Get() ? m('span', vm.Capacity.Get()) : '',
+            ]),
             // button
             m('.col-sm-2', [
                 m('button', {
-                    title: entity.Title.Get(),
+                    title: vm.ButtonTitle.Get(),
                     class: 'btn btn-primary',
-                    disabled: !Inventory.IsEnabled(entity.GetName()),
-                    onclick: () => tryBuy(entity.GetName())
+                    disabled: !vm.ButtonEnabled.Get(),
+                    onclick: vm.Buy,
                 }, [
-                    entity.ButtonText.Get()
+                    vm.ButtonText.Get(),
                 ]),
             ]),
         ])
@@ -813,32 +935,22 @@ function createThingRow(thingName: string) {
         controller: () => {
             onunload: e => toUnload.forEach(u => u());
         },
-        view: () => thingRow.view(entity)
+        view: () => thingRow.view(thingViewModels.GetViewModel(entity))
     });
 
     var redraw = () => m.redraw();
     var u = unreg => toUnload.push(unreg);
-    u(entity.Display.Event().Register(redraw));
-    u(entity.Capacity.Event().Register(redraw));
-    u(entity.CapacityEffect.Event().Register(redraw));
-    u(entity.Cost.Event().Register(redraw));
-    u(entity.CostRatio.Event().Register(redraw));
-    u(entity.Income.Event().Register(redraw));
-    u(entity.ProgressThing.Event().Register(redraw));
-    u(entity.Title.Event().Register(redraw));
-    u(entity.ZeroAtCapacity.Event().Register(redraw));
 
-    u(entity.ButtonText.Event().Register(redraw));
+    var vm = thingViewModels.GetViewModel(entity);
 
-    u(Inventory.GetCountEvent(thingName).Register(redraw));
-    u(Inventory.GetCapacityEvent(thingName).Register(redraw));
-    u(Inventory.GetShowCapacityEvent(thingName).Register(redraw));
-
-    // this is a bug
-    var progressThing = entity.ProgressThing.Get();
-    if (progressThing) {
-        u(Inventory.GetCountEvent(progressThing).Register(redraw));
-    }
+    u(vm.ButtonEnabled.Event().Register(redraw));
+    u(vm.ButtonText.Event().Register(redraw));
+    u(vm.ButtonTitle.Event().Register(redraw));
+    u(vm.Capacity.Event().Register(redraw));
+    u(vm.CapacityShown.Event().Register(redraw));
+    u(vm.Count.Event().Register(redraw));
+    u(vm.DisplayText.Event().Register(redraw));
+    u(vm.Progress.Event().Register(redraw));
 
     var unregReveal: () => void;
     unregReveal = Inventory.GetRevealEvent(thingName).Register(revealed => {
@@ -973,6 +1085,7 @@ function addNewEntities(entities: Entity[]) {
     initializeSaveData();
     entities.forEach(entity => entity.Initialize());
     Inventory.Initialize(entities);
+    thingViewModels.AddEntities(entities);
     entities.forEach(entity => createElementsForEntity(entity.GetName()));
 
     Object.keys(entityByName).forEach(thingName => things[entityByName[thingName].Display.Get()] = entityByName[thingName]);
@@ -981,6 +1094,7 @@ function addNewEntities(entities: Entity[]) {
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
 var entityByName: { [index: string]: Entity } = {};
+var thingViewModels = new ThingViewModelCollection();
 
 // for debugging
 var things: { [index: string]: Entity } = {};

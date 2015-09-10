@@ -9,7 +9,6 @@ resetButton.addEventListener('click', resetEverything, false);
 // - make game editable from inside the game
 //   - hook up events for anything missing them
 //   - switching to a more explicit component architecture
-//   - made button text code use registration to get it out of Entity
 
 // - make code consistenty pass around entity object instead of thingName string
 // - refactor PurchaseCost
@@ -17,20 +16,18 @@ resetButton.addEventListener('click', resetEverything, false);
 // - make reset reset everything including things now unknown
 // - make game save less often - 5 times per second is too much!
 
-// - add automation thing you can buy A-Tomato-Meter
+// - make Clicks actually let do multibuy
 // - display income
-// - floating text that highlights progress
+// - floating text that highlights progress (with accumulation?)
 // - give shoutouts to people who have helped - special thanks to Oppositions for that suggestion
 //   - thesamelabel for helping me get flex working
 //   - mistamadd001 suggested keg capacities with microbreweries
 // - make achievements for karbz0ne
 // - work on simulating the game so I know how long things take
 // - auto-generating game definitions
-// - fractional income support
+// - fractional income support - instead do formatters
 // - enforce display ordering so reloading the page doesn't change the order
 // - highlights when a button is hovered
-// - make text vertically centered
-// - come up with better display of rapidly increasing things
 
 interface SaveThingInfo {
     Count: number;
@@ -76,9 +73,6 @@ class Entity {
     public IncomeWhenZeroed: Property<{ [index: string]: number }>;
     public ProgressThing: Property<string>;
 
-    // derivative properties
-    public ButtonText: Property<string>;
-
     constructor(tt: ThingType) {
         this.name = tt.name;
         this.Display = new Property(tt.display);
@@ -91,10 +85,6 @@ class Entity {
         this.ZeroAtCapacity = new Property(tt.zeroAtCapacity);
         this.IncomeWhenZeroed = new Property(tt.incomeWhenZeroed);
         this.ProgressThing = new Property(tt.progressThing);
-    }
-
-    public Initialize() {
-        this.setUpButtonText();
     }
 
     getButtonText(thingName) {
@@ -110,32 +100,6 @@ class Entity {
         }
 
         return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
-    }
-
-    public UpdateButtonText() {
-        this.ButtonText.Set(this.getButtonText(this.GetName()));
-    }
-
-    private setUpButtonText() {
-        this.ButtonText = new Property('');
-
-        var updateButtonText = () => this.UpdateButtonText();
-        updateButtonText();
-
-        // change of name to this entity
-        this.Display.Event().Register(updateButtonText);
-
-        // change of name to anything in the cost of the entity
-        var cost = this.Cost.Get();
-        if (cost) {
-            Object.keys(cost).forEach(costName => {
-                var costEntity = entityByName[costName].Display.Event().Register(updateButtonText);
-            });
-        }
-
-        // change of cost composition
-        // change of the cost amounts
-        this.Cost.Event().Register(updateButtonText);
     }
 }
 
@@ -536,9 +500,6 @@ module Inventory {
             delete costEventMap[thingName];
             registerCostEvents();
         });
-
-        // update button text when count changes
-        GetCountEvent(thingName).Register(() => entity.UpdateButtonText());
 
         // set up for changing whether capacity is displayed
         var capacity = GetCapacity(thingName);
@@ -1079,7 +1040,6 @@ function onLoad() {
 function addNewEntities(entities: Entity[]) {
     entities.forEach(entity => entityByName[entity.GetName()] = entity);
     initializeSaveData();
-    entities.forEach(entity => entity.Initialize());
     Inventory.Initialize(entities);
     thingViewModels.AddEntities(entities);
     entities.forEach(entity => createElementsForEntity(entity.GetName()));

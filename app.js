@@ -21,9 +21,6 @@ var Entity = (function () {
     Entity.prototype.GetName = function () {
         return this.name;
     };
-    Entity.prototype.Initialize = function () {
-        this.setUpButtonText();
-    };
     Entity.prototype.getButtonText = function (thingName) {
         var entity = entityByName[thingName];
         var cost = new PurchaseCost(thingName);
@@ -34,27 +31,6 @@ var Entity = (function () {
             costString = "FREE!";
         }
         return 'Buy a ' + entity.Display.Get() + ' for ' + costString;
-    };
-    Entity.prototype.UpdateButtonText = function () {
-        this.ButtonText.Set(this.getButtonText(this.GetName()));
-    };
-    Entity.prototype.setUpButtonText = function () {
-        var _this = this;
-        this.ButtonText = new Property('');
-        var updateButtonText = function () { return _this.UpdateButtonText(); };
-        updateButtonText();
-        // change of name to this entity
-        this.Display.Event().Register(updateButtonText);
-        // change of name to anything in the cost of the entity
-        var cost = this.Cost.Get();
-        if (cost) {
-            Object.keys(cost).forEach(function (costName) {
-                var costEntity = entityByName[costName].Display.Event().Register(updateButtonText);
-            });
-        }
-        // change of cost composition
-        // change of the cost amounts
-        this.Cost.Event().Register(updateButtonText);
     };
     return Entity;
 })();
@@ -408,8 +384,6 @@ var Inventory;
             delete costEventMap[thingName];
             registerCostEvents();
         });
-        // update button text when count changes
-        Inventory.GetCountEvent(thingName).Register(function () { return entity.UpdateButtonText(); });
         // set up for changing whether capacity is displayed
         var capacity = GetCapacity(thingName);
         if (capacity !== -1 && GetCount(thingName) >= capacity) {
@@ -847,7 +821,6 @@ function onLoad() {
 function addNewEntities(entities) {
     entities.forEach(function (entity) { return entityByName[entity.GetName()] = entity; });
     initializeSaveData();
-    entities.forEach(function (entity) { return entity.Initialize(); });
     Inventory.Initialize(entities);
     thingViewModels.AddEntities(entities);
     entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });

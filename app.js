@@ -74,7 +74,7 @@ var ThingViewModel = (function () {
         this.Count = new Property(Inventory.GetCount(this.thingName));
         this.CapacityShown = new Property(Inventory.IsCapacityShown(this.thingName));
         //this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
-        this.Capacity = new Property(myGameState.GetThingModel(this.thingName).Capacity.Get());
+        this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
         this.ButtonText = new Property(this.calculateButtonText());
         this.ButtonEnabled = new Property(Inventory.IsEnabled(this.thingName));
         this.ButtonTitle = new Property(entity.Title.Get());
@@ -125,7 +125,7 @@ var ThingViewModel = (function () {
         }));
         u(Inventory.GetShowCapacityEvent(this.thingName).Register(function (shown) { return _this.CapacityShown.Set(shown); }));
         //u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
-        u(myGameState.GetThingModel(this.thingName).Capacity.Event().Register(function (newCapacity) { return _this.Capacity.Set(newCapacity); }));
+        u(game.Model(this.thingName).Capacity.Event().Register(function (newCapacity) { return _this.Capacity.Set(newCapacity); }));
         u(Inventory.GetEnableEvent(this.thingName).Register(function (newEnabled) { return _this.ButtonEnabled.Set(newEnabled); }));
         u(this.entity.Title.Event().Register(function (newTitle) { return _this.ButtonTitle.Set(newTitle); }));
     };
@@ -135,11 +135,11 @@ var ThingViewModel = (function () {
             return 0;
         }
         //if (Inventory.GetCount(this.thingName) === Inventory.GetCapacity(this.thingName)) {
-        if (Inventory.GetCount(this.thingName) === myGameState.GetThingModel(this.thingName).Capacity.Get()) {
+        if (Inventory.GetCount(this.thingName) === game.Model(this.thingName).Capacity.Get()) {
             return 0;
         }
         //return Inventory.GetCount(progressThing) / Inventory.GetCapacity(progressThing);
-        return Inventory.GetCount(progressThing) / myGameState.GetThingModel(progressThing).Capacity.Get();
+        return Inventory.GetCount(progressThing) / game.Model(progressThing).Capacity.Get();
     };
     ThingViewModel.prototype.calculateButtonText = function () {
         var cost = new PurchaseCost(this.thingName);
@@ -166,7 +166,7 @@ var GameState = (function () {
     GameState.prototype.GetThingNames = function () { return this.thingNames; };
     GameState.prototype.GetEntity = function (thingName) { return this.entityLookup[thingName]; };
     GameState.prototype.GetThingModels = function () { return this.models; };
-    GameState.prototype.GetThingModel = function (thingName) { return this.modelLookup[thingName]; };
+    GameState.prototype.Model = function (thingName) { return this.modelLookup[thingName]; };
     GameState.prototype.GetEvent = function () {
         return this.gameEvent;
     };
@@ -196,7 +196,9 @@ var ThingModel = (function () {
     function ThingModel(Entity, saveData, gameState) {
         this.Entity = Entity;
         this.gameState = gameState;
+        this.thingName = this.Entity.GetName();
         this.createProperties(saveData);
+        this.legacyEvents();
     }
     // should be called only once all models are created
     ThingModel.prototype.Initialize = function () {
@@ -219,6 +221,12 @@ var ThingModel = (function () {
         this.Capacity = new Property(-1);
         this.Price = new Property({});
     };
+    ThingModel.prototype.legacyEvents = function () {
+        var _this = this;
+        Inventory.GetCountEvent(this.thingName).Register(function (newCount) {
+            _this.Count.Set(newCount);
+        });
+    };
     return ThingModel;
 })();
 var Component = (function () {
@@ -239,8 +247,13 @@ var CapacityComponent = (function (_super) {
         this.refreshCleanup = function () { };
         this.entity = this.thingModel.Entity;
         this.refresh();
-        this.calculate();
-        this.cleanupComponent = gameState.GetEvent().Register(function () { return _this.refresh(); });
+        this.updateCapacity();
+        var unreg = this.thingModel.Count.Event().Register(function () { return _this.updateCapacityRevealed(); });
+        var unreg2 = gameState.GetEvent().Register(function () { return _this.refresh(); });
+        this.cleanupComponent = function () {
+            unreg();
+            unreg2();
+        };
     }
     // call this when you're getting rid of this component
     CapacityComponent.prototype.Dispose = function () {
@@ -263,20 +276,30 @@ var CapacityComponent = (function (_super) {
         var initial = this.entity.Capacity.Get();
         var affecting = Object.keys(effectTable);
         this.calculateCapacity = function () { return affecting.reduce(function (sum, affecting) { return sum
-            + _this.gameState.GetThingModel(affecting).Count.Get()
+            + _this.gameState.Model(affecting).Count.Get()
                 * effectTable[affecting]; }, initial); };
+        this.calculateCapacityRevealed = function () { return _this.thingModel.Count.Get() > _this.thingModel.Capacity.Get(); };
         var unregs = [];
         var u = function (unreg) { return unregs.push(unreg); };
         affecting.forEach(function (affected) {
-            return u(_this.gameState.GetThingModel(affected).Count.Event()
-                .Register(function () { return _this.calculate(); }));
+            return u(_this.gameState.Model(affected).Count.Event()
+                .Register(function () { return _this.updateCapacity(); }));
         });
         // remove old callbacks
         this.refreshCleanup();
         this.refreshCleanup = function () { return unregs.forEach(function (unreg) { return unreg(); }); };
     };
-    CapacityComponent.prototype.calculate = function () {
+    CapacityComponent.prototype.updateCapacity = function () {
         this.thingModel.Capacity.Set(this.calculateCapacity());
+        this.updateCapacityRevealed();
+    };
+    CapacityComponent.prototype.updateCapacityRevealed = function () {
+        if (this.thingModel.CapacityRevealed.Get()) {
+            return;
+        }
+        if (this.thingModel.Count.Get() >= this.thingModel.Capacity.Get()) {
+            this.thingModel.CapacityRevealed.Set(true);
+        }
     };
     return CapacityComponent;
 })(Component);
@@ -308,7 +331,7 @@ var Inventory;
                 events.push(Inventory.GetCountEvent(needed).Register(callback));
             });
             events.push(Inventory.GetCountEvent(thingName).Register(callback));
-            events.push(Inventory.GetCapacityEvent(thingName).Register(callback));
+            events.push(game.Model(thingName).Capacity.Event().Register(callback));
             callback();
             if (events.length > 0) {
                 costEventMap[thingName] = events;
@@ -325,39 +348,7 @@ var Inventory;
         if (capacity !== -1 && GetCount(thingName) >= capacity) {
             SetCapacityShown(thingName, true);
         }
-        // set up for changing capacity display
-        var registerCapacityEvents = function () {
-            var events = [];
-            Object.keys(capacityEffect).forEach(function (affectedName) {
-                var effect = capacityEffect[affectedName];
-                if (effect) {
-                    var callback = function (count) {
-                        var capacity = Inventory.GetCapacity(affectedName);
-                        capacityEvent.FireEvent(affectedName, function (callback) { return callback(capacity); });
-                    };
-                    var unregCallback = Inventory.GetCountEvent(thingName).Register(callback);
-                    events.push(unregCallback);
-                }
-            });
-            if (events.length > 0) {
-                capacityEventMap[thingName] = events;
-            }
-        };
-        var capacityEffect = entity.CapacityEffect.Get();
-        if (capacityEffect) {
-            registerCapacityEvents();
-        }
-        entity.CapacityEffect.Event().Register(function (capacityEffects) {
-            capacityEventMap[thingName].forEach(function (unreg) { return unreg(); });
-            delete capacityEventMap[thingName];
-            registerCapacityEvents();
-            Object.keys(capacityEffects).forEach(function (affectedName) {
-                capacity = Inventory.GetCapacity(affectedName);
-                capacityEvent.FireEvent(affectedName, function (callback) { return callback(capacity); });
-            });
-        });
     }
-    var capacityEventMap = {};
     var costEventMap = {};
     function GetCount(thingName) {
         return saveData.Stuff[thingName].Count;
@@ -432,28 +423,7 @@ var Inventory;
     }
     Inventory.IsRevealed = IsRevealed;
     function GetCapacity(thingName) {
-        var baseCapacity = 0;
-        var capacityDelta = 0;
-        var entity = entityByName[thingName];
-        var capacity = entity.Capacity.Get();
-        if (capacity === -1) {
-            return -1;
-        }
-        baseCapacity = capacity;
-        // TODO: make not wasteful
-        Object.keys(entityByName).forEach(function (affecterName) {
-            var entity = entityByName[affecterName];
-            var capacityEffect = entity.CapacityEffect.Get();
-            if (!capacityEffect) {
-                return;
-            }
-            var effect = capacityEffect[thingName];
-            var count = Inventory.GetCount(entity.GetName());
-            if (effect && count) {
-                capacityDelta += effect * count;
-            }
-        });
-        return baseCapacity + capacityDelta;
+        return game.Model(thingName).Capacity.Get();
     }
     Inventory.GetCapacity = GetCapacity;
     function SetCapacityShown(thingName, shown) {
@@ -521,9 +491,6 @@ var Inventory;
     // for updating counts of things
     var countEvent = new ThingEvent();
     Inventory.GetCountEvent = function (thingName) { return countEvent.GetEvent(thingName); };
-    // for updating capacity of things
-    var capacityEvent = new ThingEvent();
-    Inventory.GetCapacityEvent = function (thingName) { return capacityEvent.GetEvent(thingName); };
     // for enabling and disabling buy buttons
     var enableEvent = new ThingEvent();
     Inventory.GetEnableEvent = function (thingName) { return enableEvent.GetEvent(thingName); };
@@ -682,7 +649,7 @@ function onLoad() {
 function addNewEntities(entities) {
     entities.forEach(function (entity) { return entityByName[entity.GetName()] = entity; });
     initializeSaveData();
-    myGameState.addEntities(entities, saveData);
+    game.addEntities(entities, saveData);
     Inventory.Initialize(entities);
     thingViewModels.AddEntities(entities);
     entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });
@@ -692,7 +659,7 @@ function addNewEntities(entities) {
 window.onload = onLoad;
 var entityByName = {};
 var thingViewModels = new ThingViewModelCollection();
-var myGameState = new GameState();
+var game = new GameState();
 // for debugging
 var things = {};
 var nextId = 1;

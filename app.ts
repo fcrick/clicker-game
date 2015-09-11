@@ -148,7 +148,7 @@ class ThingViewModel {
         this.Count = new Property(Inventory.GetCount(this.thingName));
         this.CapacityShown = new Property(Inventory.IsCapacityShown(this.thingName));
         //this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
-        this.Capacity = new Property(myGameState.GetThingModel(this.thingName).Capacity.Get());
+        this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
 
         this.ButtonText = new Property(this.calculateButtonText());
         this.ButtonEnabled = new Property(Inventory.IsEnabled(this.thingName));
@@ -209,7 +209,7 @@ class ThingViewModel {
 
         u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
         //u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
-        u(myGameState.GetThingModel(this.thingName).Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
+        u(game.Model(this.thingName).Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
 
         u(Inventory.GetEnableEvent(this.thingName).Register(newEnabled => this.ButtonEnabled.Set(newEnabled)));
         u(this.entity.Title.Event().Register(newTitle => this.ButtonTitle.Set(newTitle)));
@@ -222,12 +222,12 @@ class ThingViewModel {
         }
 
         //if (Inventory.GetCount(this.thingName) === Inventory.GetCapacity(this.thingName)) {
-        if (Inventory.GetCount(this.thingName) === myGameState.GetThingModel(this.thingName).Capacity.Get()) {
+        if (Inventory.GetCount(this.thingName) === game.Model(this.thingName).Capacity.Get()) {
             return 0;
         }
 
         //return Inventory.GetCount(progressThing) / Inventory.GetCapacity(progressThing);
-        return Inventory.GetCount(progressThing) / myGameState.GetThingModel(progressThing).Capacity.Get();
+        return Inventory.GetCount(progressThing) / game.Model(progressThing).Capacity.Get();
     }
 
     calculateButtonText(): string {
@@ -266,7 +266,7 @@ class GameState {
     public GetEntity(thingName: string) { return this.entityLookup[thingName]; }
 
     public GetThingModels() { return this.models; }
-    public GetThingModel(thingName: string) { return this.modelLookup[thingName]; }
+    public Model(thingName: string) { return this.modelLookup[thingName]; }
 
     public GetEvent(): IGameEvent<{ (): void }> {
         return this.gameEvent;
@@ -319,7 +319,11 @@ class ThingModel {
         saveData: SaveThingInfo,
         private gameState: GameState
     ) {
+        this.thingName = this.Entity.GetName();
+
         this.createProperties(saveData);
+
+        this.legacyEvents();
     }
 
     // should be called only once all models are created
@@ -365,6 +369,13 @@ class ThingModel {
         this.Price = new Property<NumberMap>({});
     }
 
+    legacyEvents() {
+        Inventory.GetCountEvent(this.thingName).Register(newCount => {
+            this.Count.Set(newCount)
+        });
+    }
+
+    private thingName: string;
     private components: Component[];
 }
 
@@ -383,9 +394,15 @@ class CapacityComponent extends Component {
         this.entity = this.thingModel.Entity;
 
         this.refresh();
-        this.calculate();
+        this.updateCapacity();
 
-        this.cleanupComponent = gameState.GetEvent().Register(() => this.refresh());
+        var unreg = this.thingModel.Count.Event().Register(() => this.updateCapacityRevealed());
+        var unreg2 = gameState.GetEvent().Register(() => this.refresh());
+
+        this.cleanupComponent = () => {
+            unreg();
+            unreg2();
+        }
     }
 
     // call this when you're getting rid of this component
@@ -414,28 +431,42 @@ class CapacityComponent extends Component {
 
         this.calculateCapacity = () => affecting.reduce(
             (sum, affecting) => sum
-                + this.gameState.GetThingModel(affecting).Count.Get()
+                + this.gameState.Model(affecting).Count.Get()
                 * effectTable[affecting],
             initial
-        );
+            );
+
+        this.calculateCapacityRevealed = () => this.thingModel.Count.Get() > this.thingModel.Capacity.Get();
 
         var unregs = [];
         var u = unreg => unregs.push(unreg);
 
         affecting.forEach(affected =>
-            u(this.gameState.GetThingModel(affected).Count.Event()
-                .Register(() => this.calculate())));
+            u(this.gameState.Model(affected).Count.Event()
+                .Register(() => this.updateCapacity())));
 
         // remove old callbacks
         this.refreshCleanup();
         this.refreshCleanup = () => unregs.forEach(unreg => unreg());
     }
 
-    private calculate() {
+    private updateCapacity() {
         this.thingModel.Capacity.Set(this.calculateCapacity());
+        this.updateCapacityRevealed();
+    }
+
+    private updateCapacityRevealed() {
+        if (this.thingModel.CapacityRevealed.Get()) {
+            return;
+        }
+
+        if (this.thingModel.Count.Get() >= this.thingModel.Capacity.Get()) {
+            this.thingModel.CapacityRevealed.Set(true);
+        }
     }
 
     private calculateCapacity: () => number;
+    private calculateCapacityRevealed: () => boolean;
     private cleanupComponent: () => void;
     private refreshCleanup: () => void = () => { };
 
@@ -477,7 +508,7 @@ module Inventory {
             });
 
             events.push(GetCountEvent(thingName).Register(callback));
-            events.push(GetCapacityEvent(thingName).Register(callback));
+            events.push(game.Model(thingName).Capacity.Event().Register(callback));
 
             callback();
 
@@ -499,47 +530,8 @@ module Inventory {
         if (capacity !== -1 && GetCount(thingName) >= capacity) {
             SetCapacityShown(thingName, true);
         }
-
-        // set up for changing capacity display
-        var registerCapacityEvents = () => {
-            var events: { (): void }[] = [];
-
-            Object.keys(capacityEffect).forEach(affectedName => {
-                var effect = capacityEffect[affectedName];
-                if (effect) {
-                    var callback = (count) => {
-                        var capacity = Inventory.GetCapacity(affectedName);
-                        capacityEvent.FireEvent(affectedName, callback => callback(capacity));
-                    };
-
-                    var unregCallback = GetCountEvent(thingName).Register(callback);
-                    events.push(unregCallback);
-                }
-            });
-
-            if (events.length > 0) {
-                capacityEventMap[thingName] = events;
-            }
-        };
-
-        var capacityEffect = entity.CapacityEffect.Get();
-        if (capacityEffect) {
-            registerCapacityEvents();
-        }
-
-        entity.CapacityEffect.Event().Register(capacityEffects => {
-            capacityEventMap[thingName].forEach(unreg => unreg());
-            delete capacityEventMap[thingName];
-            registerCapacityEvents();
-
-            Object.keys(capacityEffects).forEach(affectedName => {
-                capacity = Inventory.GetCapacity(affectedName);
-                capacityEvent.FireEvent(affectedName, callback => callback(capacity));
-            });
-        });
     }
 
-    var capacityEventMap: { [index: string]: { (): void }[] } = {};
     var costEventMap: { [index: string]: { (): void }[] } = {};
 
     export function GetCount(thingName: string) {
@@ -627,34 +619,7 @@ module Inventory {
     }
 
     export function GetCapacity(thingName: string) {
-        var baseCapacity = 0;
-        var capacityDelta = 0;
-
-        var entity = entityByName[thingName]
-
-        var capacity = entity.Capacity.Get();
-        if (capacity === -1) {
-            return -1;
-        }
-
-        baseCapacity = capacity;
-
-        // TODO: make not wasteful
-        Object.keys(entityByName).forEach(affecterName => {
-            var entity = entityByName[affecterName];
-            var capacityEffect = entity.CapacityEffect.Get();
-            if (!capacityEffect) {
-                return;
-            }
-
-            var effect = capacityEffect[thingName];
-            var count = Inventory.GetCount(entity.GetName());
-            if (effect && count) {
-                capacityDelta += effect * count;
-            }
-        });
-
-        return baseCapacity + capacityDelta;
+        return game.Model(thingName).Capacity.Get();
     }
 
     export function SetCapacityShown(thingName: string, shown: boolean) {
@@ -729,10 +694,6 @@ module Inventory {
     // for updating counts of things
     var countEvent = new ThingEvent<CountCallback>();
     export var GetCountEvent = (thingName: string) => countEvent.GetEvent(thingName);
-
-    // for updating capacity of things
-    var capacityEvent = new ThingEvent<CapacityCallback>();
-    export var GetCapacityEvent = (thingName: string) => capacityEvent.GetEvent(thingName);
 
     // for enabling and disabling buy buttons
     var enableEvent = new ThingEvent<ToggleCallback>();
@@ -932,7 +893,7 @@ function onLoad() {
 function addNewEntities(entities: Entity[]) {
     entities.forEach(entity => entityByName[entity.GetName()] = entity);
     initializeSaveData();
-    myGameState.addEntities(entities, saveData);
+    game.addEntities(entities, saveData);
     Inventory.Initialize(entities);
     thingViewModels.AddEntities(entities);
     entities.forEach(entity => createElementsForEntity(entity.GetName()));
@@ -944,7 +905,7 @@ function addNewEntities(entities: Entity[]) {
 window.onload = onLoad;
 var entityByName: { [index: string]: Entity } = {};
 var thingViewModels = new ThingViewModelCollection();
-var myGameState = new GameState();
+var game = new GameState();
 
 // for debugging
 var things: { [index: string]: Entity } = {};

@@ -1,6 +1,7 @@
 /// <reference path="mithril.d.ts"/>
 /// <reference path="event.ts"/>
 /// <reference path="gamedata.ts"/>
+/// <reference path="views.ts"/>
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
@@ -72,7 +73,7 @@ var ThingViewModel = (function () {
         this.DisplayText = new Property(entity.Display.Get());
         this.Progress = new Property(this.calculateProgress());
         this.Count = new Property(Inventory.GetCount(this.thingName));
-        this.CapacityShown = new Property(Inventory.IsCapacityShown(this.thingName));
+        this.CapacityShown = new Property(game.Model(this.thingName).CapacityRevealed.Get());
         //this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
         this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
         this.ButtonText = new Property(this.calculateButtonText());
@@ -123,7 +124,8 @@ var ThingViewModel = (function () {
             _this.Count.Set(newCount);
             _this.ButtonText.Set(_this.calculateButtonText());
         }));
-        u(Inventory.GetShowCapacityEvent(this.thingName).Register(function (shown) { return _this.CapacityShown.Set(shown); }));
+        //u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
+        u(game.Model(this.thingName).CapacityRevealed.Event().Register(function (reveal) { return _this.CapacityShown.Set(reveal); }));
         //u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
         u(game.Model(this.thingName).Capacity.Event().Register(function (newCapacity) { return _this.Capacity.Set(newCapacity); }));
         u(Inventory.GetEnableEvent(this.thingName).Register(function (newEnabled) { return _this.ButtonEnabled.Set(newEnabled); }));
@@ -220,6 +222,11 @@ var ThingModel = (function () {
         this.Purchasable = new Property(false);
         this.Capacity = new Property(-1);
         this.Price = new Property({});
+    };
+    ThingModel.prototype.saveEvents = function () {
+        var _this = this;
+        // need cleanup
+        this.CapacityRevealed.Event().Register(function (reveal) { return saveData[_this.thingName].IsCapShown = reveal; });
     };
     ThingModel.prototype.legacyEvents = function () {
         var _this = this;
@@ -343,11 +350,6 @@ var Inventory;
             delete costEventMap[thingName];
             registerCostEvents();
         });
-        // set up for changing whether capacity is displayed
-        var capacity = GetCapacity(thingName);
-        if (capacity !== -1 && GetCount(thingName) >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
     }
     var costEventMap = {};
     function GetCount(thingName) {
@@ -356,7 +358,7 @@ var Inventory;
     Inventory.GetCount = GetCount;
     function ChangeCount(thingName, delta) {
         var initialCount = saveData.Stuff[thingName].Count;
-        var capacity = Inventory.GetCapacity(thingName);
+        var capacity = game.Model(thingName).Capacity.Get();
         var count = saveData.Stuff[thingName].Count += delta;
         var overflow = 0;
         if (capacity !== -1 && count > capacity) {
@@ -402,9 +404,6 @@ var Inventory;
             }
             return;
         }
-        if (capacity !== -1 && count >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
     }
     function SetReveal(thingName, revealed) {
         var current = saveData.Stuff[thingName].IsRevealed;
@@ -426,19 +425,6 @@ var Inventory;
         return game.Model(thingName).Capacity.Get();
     }
     Inventory.GetCapacity = GetCapacity;
-    function SetCapacityShown(thingName, shown) {
-        var current = saveData.Stuff[thingName].IsCapShown;
-        if (current === shown) {
-            return;
-        }
-        saveData.Stuff[thingName].IsCapShown = shown;
-        showCapacityEvent.FireEvent(thingName, function (callback) { return callback(shown); });
-    }
-    Inventory.SetCapacityShown = SetCapacityShown;
-    function IsCapacityShown(thingName) {
-        return saveData.Stuff[thingName].IsCapShown;
-    }
-    Inventory.IsCapacityShown = IsCapacityShown;
     function SetEnabled(thingName, enabled) {
         var current = enabledTable[thingName];
         if (current === enabled) {
@@ -462,12 +448,11 @@ var Inventory;
         names.forEach(function (thingName) {
             // TODO: this should also check capacity
             SetReveal(thingName, false);
-            SetCapacityShown(thingName, false);
+            game.Model(thingName).CapacityRevealed.Set(false);
         });
         names.forEach(function (thingName) { return initializeRevealEnabled(entityByName[thingName]); });
     }
     Inventory.Reset = Reset;
-    ;
     ;
     ;
     var ThingEvent = (function () {
@@ -497,9 +482,6 @@ var Inventory;
     // for showing that things exist at all
     var revealEvent = new ThingEvent();
     Inventory.GetRevealEvent = function (thingName) { return revealEvent.GetEvent(thingName); };
-    // for showing the capacity of a thing
-    var showCapacityEvent = new ThingEvent();
-    Inventory.GetShowCapacityEvent = function (thingName) { return showCapacityEvent.GetEvent(thingName); };
     var enabledTable = {};
 })(Inventory || (Inventory = {}));
 var cellClass = 'col-sm-2';
@@ -590,7 +572,7 @@ function tryBuy(thingToBuy) {
     if (!cost.CanAfford()) {
         return;
     }
-    var capacity = Inventory.GetCapacity(thingToBuy);
+    var capacity = game.Model(thingToBuy).Capacity.Get();
     if (capacity !== -1 && Inventory.GetCount(thingToBuy) >= capacity) {
         return;
     }

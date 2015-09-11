@@ -1,4 +1,8 @@
-﻿var thingRow = {
+﻿/// <reference path="mithril.d.ts"/>
+/// <reference path="app.ts"/>
+/// <reference path="gamedata.ts"/>
+
+var thingRow = {
     view: (vm: ThingViewModel) =>
         // row
         m('.row', { style: { display: 'flex', alignItems: 'center' } }, [

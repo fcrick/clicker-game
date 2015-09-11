@@ -1,3 +1,6 @@
+/// <reference path="mithril.d.ts"/>
+/// <reference path="app.ts"/>
+/// <reference path="gamedata.ts"/>
 var GameEvent = (function () {
     function GameEvent() {
         this.callbacks = [];

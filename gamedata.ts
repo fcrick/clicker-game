@@ -1,4 +1,6 @@
-﻿var definitions = <ThingType[]>[
+﻿/// <reference path="app.ts"/>
+
+var definitions = <ThingType[]>[
     {
         name: 'tt-Point',
         display: 'Beer',

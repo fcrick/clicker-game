@@ -1,6 +1,7 @@
 ﻿/// <reference path="mithril.d.ts"/>
 /// <reference path="event.ts"/>
 /// <reference path="gamedata.ts"/>
+/// <reference path="views.ts"/>
 
 var resetButton = document.getElementById("resetButton");
 var myText = document.getElementById("helloText");
@@ -146,7 +147,7 @@ class ThingViewModel {
         this.Progress = new Property(this.calculateProgress());
 
         this.Count = new Property(Inventory.GetCount(this.thingName));
-        this.CapacityShown = new Property(Inventory.IsCapacityShown(this.thingName));
+        this.CapacityShown = new Property(game.Model(this.thingName).CapacityRevealed.Get());
         //this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
         this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
 
@@ -207,7 +208,8 @@ class ThingViewModel {
             this.ButtonText.Set(this.calculateButtonText());
         }));
 
-        u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
+        //u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
+        u(game.Model(this.thingName).CapacityRevealed.Event().Register(reveal => this.CapacityShown.Set(reveal)));
         //u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
         u(game.Model(this.thingName).Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
 
@@ -369,6 +371,11 @@ class ThingModel {
         this.Price = new Property<NumberMap>({});
     }
 
+    saveEvents() {
+        // need cleanup
+        this.CapacityRevealed.Event().Register(reveal => saveData[this.thingName].IsCapShown = reveal);
+    }
+
     legacyEvents() {
         Inventory.GetCountEvent(this.thingName).Register(newCount => {
             this.Count.Set(newCount)
@@ -524,12 +531,6 @@ module Inventory {
             delete costEventMap[thingName];
             registerCostEvents();
         });
-
-        // set up for changing whether capacity is displayed
-        var capacity = GetCapacity(thingName);
-        if (capacity !== -1 && GetCount(thingName) >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
     }
 
     var costEventMap: { [index: string]: { (): void }[] } = {};
@@ -540,7 +541,7 @@ module Inventory {
 
     export function ChangeCount(thingName: string, delta: number) {
         var initialCount = saveData.Stuff[thingName].Count;
-        var capacity = Inventory.GetCapacity(thingName);
+        var capacity = game.Model(thingName).Capacity.Get();
         var count = saveData.Stuff[thingName].Count += delta;
         var overflow = 0;
 
@@ -594,10 +595,6 @@ module Inventory {
             }
             return;
         }
-
-        if (capacity !== -1 && count >= capacity) {
-            SetCapacityShown(thingName, true);
-        }
     }
 
     export function SetReveal(thingName: string, revealed: boolean) {
@@ -620,20 +617,6 @@ module Inventory {
 
     export function GetCapacity(thingName: string) {
         return game.Model(thingName).Capacity.Get();
-    }
-
-    export function SetCapacityShown(thingName: string, shown: boolean) {
-        var current = saveData.Stuff[thingName].IsCapShown;
-        if (current === shown) {
-            return;
-        }
-
-        saveData.Stuff[thingName].IsCapShown = shown;
-        showCapacityEvent.FireEvent(thingName, callback => callback(shown));
-    }
-
-    export function IsCapacityShown(thingName: string) {
-        return saveData.Stuff[thingName].IsCapShown;
     }
 
     export function SetEnabled(thingName: string, enabled: boolean) {
@@ -662,8 +645,8 @@ module Inventory {
 
         names.forEach(thingName => {
             // TODO: this should also check capacity
-            SetReveal(thingName, false); 
-            SetCapacityShown(thingName, false);
+            SetReveal(thingName, false);
+            game.Model(thingName).CapacityRevealed.Set(false);
         });
 
         names.forEach(thingName => initializeRevealEnabled(entityByName[thingName]));
@@ -671,7 +654,6 @@ module Inventory {
 
     // event callback interfaces
     interface CountCallback { (count: number, previous: number): void; };
-    interface CapacityCallback { (capacity: number): void; };
     interface ToggleCallback { (toggled: boolean): void; };
 
     class ThingEvent<T> {
@@ -702,10 +684,6 @@ module Inventory {
     // for showing that things exist at all
     var revealEvent = new ThingEvent<ToggleCallback>();
     export var GetRevealEvent = (thingName: string) => revealEvent.GetEvent(thingName);
-
-    // for showing the capacity of a thing
-    var showCapacityEvent = new ThingEvent<ToggleCallback>();
-    export var GetShowCapacityEvent = (thingName: string) => showCapacityEvent.GetEvent(thingName);
 
     var enabledTable: { [index: string]: boolean } = {};
 }
@@ -820,7 +798,7 @@ function tryBuy(thingToBuy) {
         return;
     }
 
-    var capacity = Inventory.GetCapacity(thingToBuy);
+    var capacity = game.Model(thingToBuy).Capacity.Get();
     if (capacity !== -1 && Inventory.GetCount(thingToBuy) >= capacity) {
         return;
     }

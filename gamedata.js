@@ -1,3 +1,4 @@
+/// <reference path="app.ts"/>
 var definitions = [
     {
         name: 'tt-Point',

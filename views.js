@@ -1,3 +1,6 @@
+/// <reference path="mithril.d.ts"/>
+/// <reference path="app.ts"/>
+/// <reference path="gamedata.ts"/>
 var thingRow = {
     view: function (vm) {
         // row

@@ -1,4 +1,8 @@
-﻿interface IGameEvent<T> {
+﻿/// <reference path="mithril.d.ts"/>
+/// <reference path="app.ts"/>
+/// <reference path="gamedata.ts"/>
+
+interface IGameEvent<T> {
     Register: (callback: T) => () => void;
 }
 

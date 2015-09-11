@@ -148,7 +148,6 @@ class ThingViewModel {
 
         this.Count = new Property(Inventory.GetCount(this.thingName));
         this.CapacityShown = new Property(game.Model(this.thingName).CapacityRevealed.Get());
-        //this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
         this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
 
         this.ButtonText = new Property(this.calculateButtonText());
@@ -208,9 +207,7 @@ class ThingViewModel {
             this.ButtonText.Set(this.calculateButtonText());
         }));
 
-        //u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
         u(game.Model(this.thingName).CapacityRevealed.Event().Register(reveal => this.CapacityShown.Set(reveal)));
-        //u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
         u(game.Model(this.thingName).Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
 
         u(Inventory.GetEnableEvent(this.thingName).Register(newEnabled => this.ButtonEnabled.Set(newEnabled)));
@@ -223,12 +220,10 @@ class ThingViewModel {
             return 0;
         }
 
-        //if (Inventory.GetCount(this.thingName) === Inventory.GetCapacity(this.thingName)) {
         if (Inventory.GetCount(this.thingName) === game.Model(this.thingName).Capacity.Get()) {
             return 0;
         }
 
-        //return Inventory.GetCount(progressThing) / Inventory.GetCapacity(progressThing);
         return Inventory.GetCount(progressThing) / game.Model(progressThing).Capacity.Get();
     }
 

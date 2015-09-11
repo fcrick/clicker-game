@@ -74,7 +74,6 @@ var ThingViewModel = (function () {
         this.Progress = new Property(this.calculateProgress());
         this.Count = new Property(Inventory.GetCount(this.thingName));
         this.CapacityShown = new Property(game.Model(this.thingName).CapacityRevealed.Get());
-        //this.Capacity = new Property(Inventory.GetCapacity(this.thingName));
         this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
         this.ButtonText = new Property(this.calculateButtonText());
         this.ButtonEnabled = new Property(Inventory.IsEnabled(this.thingName));
@@ -124,9 +123,7 @@ var ThingViewModel = (function () {
             _this.Count.Set(newCount);
             _this.ButtonText.Set(_this.calculateButtonText());
         }));
-        //u(Inventory.GetShowCapacityEvent(this.thingName).Register(shown => this.CapacityShown.Set(shown)));
         u(game.Model(this.thingName).CapacityRevealed.Event().Register(function (reveal) { return _this.CapacityShown.Set(reveal); }));
-        //u(Inventory.GetCapacityEvent(this.thingName).Register(newCapacity => this.Capacity.Set(newCapacity)));
         u(game.Model(this.thingName).Capacity.Event().Register(function (newCapacity) { return _this.Capacity.Set(newCapacity); }));
         u(Inventory.GetEnableEvent(this.thingName).Register(function (newEnabled) { return _this.ButtonEnabled.Set(newEnabled); }));
         u(this.entity.Title.Event().Register(function (newTitle) { return _this.ButtonTitle.Set(newTitle); }));
@@ -136,11 +133,9 @@ var ThingViewModel = (function () {
         if (!progressThing) {
             return 0;
         }
-        //if (Inventory.GetCount(this.thingName) === Inventory.GetCapacity(this.thingName)) {
         if (Inventory.GetCount(this.thingName) === game.Model(this.thingName).Capacity.Get()) {
             return 0;
         }
-        //return Inventory.GetCount(progressThing) / Inventory.GetCapacity(progressThing);
         return Inventory.GetCount(progressThing) / game.Model(progressThing).Capacity.Get();
     };
     ThingViewModel.prototype.calculateButtonText = function () {

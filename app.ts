@@ -151,7 +151,7 @@ class ThingViewModel {
         this.Capacity = new Property(game.Model(this.thingName).Capacity.Get());
 
         this.ButtonText = new Property(this.calculateButtonText());
-        this.ButtonEnabled = new Property(Inventory.IsEnabled(this.thingName));
+        this.ButtonEnabled = new Property(game.Model(this.thingName).Purchasable.Get());
         this.ButtonTitle = new Property(entity.Title.Get());
 
         this.setupEvents();
@@ -202,18 +202,21 @@ class ThingViewModel {
 
         this.setupProgressEvent();
 
-        u(game.Model(this.thingName).Count.Event().Register(newCount => {
+        var thingModel = game.Model(this.thingName);
+
+        u(thingModel.Count.Event().Register(newCount => {
             this.Count.Set(newCount);
         }));
 
-        u(game.Model(this.thingName).Price.Event().Register(() => {
+        u(thingModel.Price.Event().Register(() => {
             this.ButtonText.Set(this.calculateButtonText());
         }));
 
-        u(game.Model(this.thingName).CapacityRevealed.Event().Register(reveal => this.CapacityShown.Set(reveal)));
-        u(game.Model(this.thingName).Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
+        u(thingModel.CapacityRevealed.Event().Register(reveal => this.CapacityShown.Set(reveal)));
+        u(thingModel.Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
 
-        u(Inventory.GetEnableEvent(this.thingName).Register(newEnabled => this.ButtonEnabled.Set(newEnabled)));
+        u(thingModel.Purchasable.Event().Register(enabled => this.ButtonEnabled.Set(enabled)));
+        //u(Inventory.GetEnableEvent(this.thingName).Register(newEnabled => this.ButtonEnabled.Set(newEnabled)));
         u(this.entity.Title.Event().Register(newTitle => this.ButtonTitle.Set(newTitle)));
     }
 
@@ -343,6 +346,8 @@ class ThingModel {
 
     // Purchase can be attempted
     public Purchasable: Property<boolean>;
+    public CanAfford: Property<boolean>;
+    public AtCapacity: Property<boolean>;
 
     // Capacity can be shown to the user
     public CapacityRevealed: Property<boolean>;
@@ -366,9 +371,20 @@ class ThingModel {
         this.Count = new Property(saveData.Count);
 
         // derivative values
-        this.Purchasable = new Property(false);
+        this.CanAfford =  new Property(true);
+        this.AtCapacity = new Property(false);
+
         this.Capacity = new Property(-1);
         this.Price = new Property<NumberMap>({});
+
+        // calculated properties
+        this.Purchasable = new Property(false);
+        var updatePurchable = () => this.Purchasable.Set(
+            this.CanAfford.Get() && !this.AtCapacity.Get()
+            );
+
+        this.CanAfford.Event().Register(updatePurchable);
+        this.AtCapacity.Event().Register(updatePurchable);
     }
 
     saveEvents() {
@@ -400,10 +416,14 @@ class CostComponent extends Component {
     constructor(protected thingModel: ThingModel, protected gameState: GameState) {
         super(thingModel, gameState);
 
+        this.refresh();
         this.updateCost();
 
         var unreg = this.thingModel.Count.Event().Register(() => this.updateCost());
-        var unreg2 = gameState.GetEvent().Register(() => this.updateCost());
+        var unreg2 = gameState.GetEvent().Register(() => {
+            this.refresh();
+            this.updateCost();
+        });
 
         this.cleanupComponent = () => {
             unreg();
@@ -414,6 +434,23 @@ class CostComponent extends Component {
     // call this when you're getting rid of this component
     public Dispose() {
         this.cleanupComponent();
+        this.refreshCleanup();
+    }
+
+    private refresh() {
+        var unregs = [];
+        var u = unreg => unregs.push(unreg);
+
+        var cost = this.entity.Cost.Get();
+        if (cost) {
+            Object.keys(cost).forEach(affected =>
+                u(this.gameState.Model(affected).Count.Event()
+                    .Register(() => this.updateAffordability())));
+        }
+
+        // remove old callbacks
+        this.refreshCleanup();
+        this.refreshCleanup = () => unregs.forEach(unreg => unreg());
     }
 
     private updateCost() {
@@ -441,9 +478,25 @@ class CostComponent extends Component {
         });
 
         this.thingModel.Price.Set(currentPrice);
+
+        this.updateAffordability();
+    }
+
+    private updateAffordability() {
+        var price = this.thingModel.Price.Get();
+
+        var canAfford = true;
+        if (price) {
+            canAfford = Object.keys(price).every(thingName =>
+                game.Model(thingName).Count.Get() >= price[thingName]
+                );
+        }
+
+        this.thingModel.CanAfford.Set(canAfford);
     }
 
     private cleanupComponent: () => void;
+    private refreshCleanup: () => void = () => { };
 }
 
 class CapacityComponent extends Component {
@@ -514,11 +567,17 @@ class CapacityComponent extends Component {
     }
 
     private updateCapacityRevealed() {
-        if (this.thingModel.CapacityRevealed.Get()) {
+        var capacity = this.thingModel.Capacity.Get();
+        if (capacity === -1) {
+            this.thingModel.AtCapacity.Set(false);
+            this.thingModel.CapacityRevealed.Set(false);
             return;
         }
 
-        if (this.thingModel.Count.Get() >= this.thingModel.Capacity.Get()) {
+        var atCapacity = this.thingModel.Count.Get() >= capacity;
+        this.thingModel.AtCapacity.Set(atCapacity);
+
+        if (atCapacity) {
             this.thingModel.CapacityRevealed.Set(true);
         }
     }
@@ -556,10 +615,10 @@ module Inventory {
         var registerCostEvents = () => {
             var events: { (): void }[] = [];
 
-            var purchaseCost = new PurchaseCost(thingName);
+            var price = game.Model(thingName).Price.Get();
             var callback = () => initializeRevealEnabled(entity);
 
-            purchaseCost.GetThingNames().forEach(needed => {
+            Object.keys(price).forEach(needed => {
                 events.push(GetCountEvent(needed).Register(callback));
             });
 
@@ -839,6 +898,7 @@ class PurchaseCost {
 
 function tryBuy(thingToBuy) {
     var cost = new PurchaseCost(thingToBuy);
+    var price = game.Model(thingToBuy).Price.Get();
     var things = cost.GetThingNames();
 
     if (!cost.CanAfford()) {
@@ -851,6 +911,7 @@ function tryBuy(thingToBuy) {
     }
 
     cost.Deduct();
+    Object.keys(price).forEach(thingName => Inventory.ChangeCount(thingName, -price[thingName]));
     Inventory.ChangeCount(thingToBuy, 1);
 
     save();

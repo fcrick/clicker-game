@@ -29,7 +29,10 @@
   </ItemGroup>
   <ItemGroup>
     <TypeScriptCompile Include="app.ts" />
+    <TypeScriptCompile Include="event.ts" />
+    <TypeScriptCompile Include="gamedata.ts" />
     <TypeScriptCompile Include="mithril.d.ts" />
+    <TypeScriptCompile Include="views.ts" />
   </ItemGroup>
   <ItemGroup>
     <None Include="web.Debug.config">
@@ -44,6 +47,9 @@
   </PropertyGroup>
   <PropertyGroup>
     <RootNamespace>clicker-game</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>clickergame</AssemblyName>
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WebApplications\Microsoft.WebApplication.targets" Condition="Exists('$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\WebApplications\Microsoft.WebApplication.targets')" />

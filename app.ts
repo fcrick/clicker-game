@@ -231,9 +231,9 @@ class ThingViewModel {
     }
 
     calculateButtonText(): string {
-        var cost = new PurchaseCost(this.thingName);
-        var costString = cost.GetThingNames().map(name =>
-            cost.GetCost(name) + ' ' + entityByName[name].Display.Get()
+        var price = game.Model(this.thingName).Price.Get();
+        var costString = Object.keys(price).map(thingName =>
+            price[thingName] + ' ' + entityByName[thingName].Display.Get()
             ).join(', ');
 
         if (!costString) {

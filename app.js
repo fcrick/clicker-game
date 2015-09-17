@@ -141,9 +141,9 @@ var ThingViewModel = (function () {
         return Inventory.GetCount(progressThing) / game.Model(progressThing).Capacity.Get();
     };
     ThingViewModel.prototype.calculateButtonText = function () {
-        var cost = new PurchaseCost(this.thingName);
-        var costString = cost.GetThingNames().map(function (name) {
-            return cost.GetCost(name) + ' ' + entityByName[name].Display.Get();
+        var price = game.Model(this.thingName).Price.Get();
+        var costString = Object.keys(price).map(function (thingName) {
+            return price[thingName] + ' ' + entityByName[thingName].Display.Get();
         }).join(', ');
         if (!costString) {
             costString = "FREE!";

@@ -333,12 +333,12 @@ class ThingModel {
     public Initialize() {
         this.components = [];
 
+        this.components.push(new CostComponent(this, this.gameState));
+
         // if we don't have infinite space, we need to track capacity
         if (this.Entity.Capacity.Get() !== -1) {
             this.components.push(new CapacityComponent(this, this.gameState));
         }
-
-        this.components.push(new CostComponent(this, this.gameState));
     }
 
     // Can be shown to the user
@@ -599,14 +599,12 @@ module Inventory {
         }
 
         var thingName = entity.GetName()
-        var purchaseCost = new PurchaseCost(thingName);
+        var purchasable = game.Model(thingName).Purchasable.Get();
 
         var count = GetCount(thingName);
-        if (count > 0 || GetCapacity(thingName) !== 0 && purchaseCost.CanAfford()) {
+        if (count > 0 || purchasable) {
             SetReveal(thingName, true);
         }
-
-        SetEnabled(thingName, IsEnabled(thingName));
     }
 
     function initializeEntity(entity: Entity) {
@@ -727,25 +725,6 @@ module Inventory {
         return game.Model(thingName).Capacity.Get();
     }
 
-    export function SetEnabled(thingName: string, enabled: boolean) {
-        var current = enabledTable[thingName];
-        if (current === enabled) {
-            return;
-        }
-
-        enabledTable[thingName] = enabled;
-        enableEvent.FireEvent(thingName, callback => callback(enabled));
-    }
-
-    export function IsEnabled(thingName: string) {
-        var canAfford = new PurchaseCost(thingName).CanAfford();
-
-        var count = GetCount(thingName);
-        var capacity = GetCapacity(thingName);
-
-        return canAfford && (capacity === -1 || count < capacity)
-    }
-
     // full game reset
     export function Reset() {
         var names = Object.keys(entityByName);
@@ -785,15 +764,9 @@ module Inventory {
     var countEvent = new ThingEvent<CountCallback>();
     export var GetCountEvent = (thingName: string) => countEvent.GetEvent(thingName);
 
-    // for enabling and disabling buy buttons
-    var enableEvent = new ThingEvent<ToggleCallback>();
-    export var GetEnableEvent = (thingName: string) => enableEvent.GetEvent(thingName);
-
     // for showing that things exist at all
     var revealEvent = new ThingEvent<ToggleCallback>();
     export var GetRevealEvent = (thingName: string) => revealEvent.GetEvent(thingName);
-
-    var enabledTable: { [index: string]: boolean } = {};
 }
 
 function createElementsForEntity(thingName: string) {
@@ -857,60 +830,14 @@ function createThingRow(thingName: string) {
     });
 }
 
-class PurchaseCost {
-    private costTable: { [index: string]: number; };
-
-    constructor(public thingName: string) {
-        this.costTable = entityByName[thingName].Cost.Get();
-        if (!this.costTable) {
-            this.costTable = {};
-        }
-    }
-
-    public CanAfford() {
-        return this.GetThingNames().every(thingName => Inventory.GetCount(thingName) >= this.GetCost(thingName));
-    }
-
-    public Deduct() {
-        this.GetThingNames().forEach(thingName => {
-            Inventory.ChangeCount(thingName, -this.GetCost(thingName));
-        });
-    }
-
-    public GetThingNames() {
-        return Object.keys(this.costTable);
-    }
-
-    // get how much of thingName I need to purchase 1 this.ThingToBuy
-    public GetCost(thingName): number {
-        var cost = this.costTable[thingName];
-        if (!cost)
-            return 0;
-
-        var ratio = entityByName[this.thingName].CostRatio.Get();
-        if (!ratio) {
-            ratio = 1.15;
-        }
-
-        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.thingName)));
-    }
-}
-
 function tryBuy(thingToBuy) {
-    var cost = new PurchaseCost(thingToBuy);
-    var price = game.Model(thingToBuy).Price.Get();
-    var things = cost.GetThingNames();
+    var thingModel = game.Model(thingToBuy);
+    var price = thingModel.Price.Get();
 
-    if (!cost.CanAfford()) {
+    if (!thingModel.Purchasable.Get()) {
         return;
     }
 
-    var capacity = game.Model(thingToBuy).Capacity.Get();
-    if (capacity !== -1 && Inventory.GetCount(thingToBuy) >= capacity) {
-        return;
-    }
-
-    cost.Deduct();
     Object.keys(price).forEach(thingName => Inventory.ChangeCount(thingName, -price[thingName]));
     Inventory.ChangeCount(thingToBuy, 1);
 

@@ -26,17 +26,19 @@ var GameEvent = (function () {
 var Property = (function () {
     function Property(current) {
         this.current = current;
+        this.hasFired = false;
         this.event = new GameEvent();
     }
     Property.prototype.Get = function () {
         return this.current;
     };
     Property.prototype.Set = function (value) {
-        if (this.current === value) {
+        if (this.current === value && this.hasFired) {
             return;
         }
         var previous = this.current;
         this.current = value;
+        this.hasFired = true;
         this.event.Fire(function (callback) { return callback(value, previous); });
     };
     Property.prototype.Event = function () {

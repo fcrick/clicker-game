@@ -204,11 +204,11 @@ var ThingModel = (function () {
     // should be called only once all models are created
     ThingModel.prototype.Initialize = function () {
         this.components = [];
+        this.components.push(new CostComponent(this, this.gameState));
         // if we don't have infinite space, we need to track capacity
         if (this.Entity.Capacity.Get() !== -1) {
             this.components.push(new CapacityComponent(this, this.gameState));
         }
-        this.components.push(new CostComponent(this, this.gameState));
     };
     // Purchase one of this type
     ThingModel.prototype.Buy = function () {
@@ -407,12 +407,11 @@ var Inventory;
             return;
         }
         var thingName = entity.GetName();
-        var purchaseCost = new PurchaseCost(thingName);
+        var purchasable = game.Model(thingName).Purchasable.Get();
         var count = GetCount(thingName);
-        if (count > 0 || GetCapacity(thingName) !== 0 && purchaseCost.CanAfford()) {
+        if (count > 0 || purchasable) {
             SetReveal(thingName, true);
         }
-        SetEnabled(thingName, IsEnabled(thingName));
     }
     function initializeEntity(entity) {
         var thingName = entity.GetName();
@@ -511,22 +510,6 @@ var Inventory;
         return game.Model(thingName).Capacity.Get();
     }
     Inventory.GetCapacity = GetCapacity;
-    function SetEnabled(thingName, enabled) {
-        var current = enabledTable[thingName];
-        if (current === enabled) {
-            return;
-        }
-        enabledTable[thingName] = enabled;
-        enableEvent.FireEvent(thingName, function (callback) { return callback(enabled); });
-    }
-    Inventory.SetEnabled = SetEnabled;
-    function IsEnabled(thingName) {
-        var canAfford = new PurchaseCost(thingName).CanAfford();
-        var count = GetCount(thingName);
-        var capacity = GetCapacity(thingName);
-        return canAfford && (capacity === -1 || count < capacity);
-    }
-    Inventory.IsEnabled = IsEnabled;
     // full game reset
     function Reset() {
         var names = Object.keys(entityByName);
@@ -562,13 +545,9 @@ var Inventory;
     // for updating counts of things
     var countEvent = new ThingEvent();
     Inventory.GetCountEvent = function (thingName) { return countEvent.GetEvent(thingName); };
-    // for enabling and disabling buy buttons
-    var enableEvent = new ThingEvent();
-    Inventory.GetEnableEvent = function (thingName) { return enableEvent.GetEvent(thingName); };
     // for showing that things exist at all
     var revealEvent = new ThingEvent();
     Inventory.GetRevealEvent = function (thingName) { return revealEvent.GetEvent(thingName); };
-    var enabledTable = {};
 })(Inventory || (Inventory = {}));
 function createElementsForEntity(thingName) {
     if (Inventory.IsRevealed(thingName)) {
@@ -617,52 +596,12 @@ function createThingRow(thingName) {
         unregReveal();
     });
 }
-var PurchaseCost = (function () {
-    function PurchaseCost(thingName) {
-        this.thingName = thingName;
-        this.costTable = entityByName[thingName].Cost.Get();
-        if (!this.costTable) {
-            this.costTable = {};
-        }
-    }
-    PurchaseCost.prototype.CanAfford = function () {
-        var _this = this;
-        return this.GetThingNames().every(function (thingName) { return Inventory.GetCount(thingName) >= _this.GetCost(thingName); });
-    };
-    PurchaseCost.prototype.Deduct = function () {
-        var _this = this;
-        this.GetThingNames().forEach(function (thingName) {
-            Inventory.ChangeCount(thingName, -_this.GetCost(thingName));
-        });
-    };
-    PurchaseCost.prototype.GetThingNames = function () {
-        return Object.keys(this.costTable);
-    };
-    // get how much of thingName I need to purchase 1 this.ThingToBuy
-    PurchaseCost.prototype.GetCost = function (thingName) {
-        var cost = this.costTable[thingName];
-        if (!cost)
-            return 0;
-        var ratio = entityByName[this.thingName].CostRatio.Get();
-        if (!ratio) {
-            ratio = 1.15;
-        }
-        return Math.floor(cost * Math.pow(ratio, Inventory.GetCount(this.thingName)));
-    };
-    return PurchaseCost;
-})();
 function tryBuy(thingToBuy) {
-    var cost = new PurchaseCost(thingToBuy);
-    var price = game.Model(thingToBuy).Price.Get();
-    var things = cost.GetThingNames();
-    if (!cost.CanAfford()) {
+    var thingModel = game.Model(thingToBuy);
+    var price = thingModel.Price.Get();
+    if (!thingModel.Purchasable.Get()) {
         return;
     }
-    var capacity = game.Model(thingToBuy).Capacity.Get();
-    if (capacity !== -1 && Inventory.GetCount(thingToBuy) >= capacity) {
-        return;
-    }
-    cost.Deduct();
     Object.keys(price).forEach(function (thingName) { return Inventory.ChangeCount(thingName, -price[thingName]); });
     Inventory.ChangeCount(thingToBuy, 1);
     save();

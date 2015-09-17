@@ -32,6 +32,7 @@ class GameEvent<T> implements IGameEvent<T> {
 
 class Property<T> {
     private event: GameEvent<Property.Change<T>>;
+    private hasFired: boolean = false;
 
     constructor(private current: T) {
         this.event = new GameEvent<Property.Change<T>>();
@@ -42,12 +43,13 @@ class Property<T> {
     }
 
     public Set(value: T) {
-        if (this.current === value) {
+        if (this.current === value && this.hasFired) {
             return;
         }
 
         var previous = this.current;
         this.current = value;
+        this.hasFired = true;
         this.event.Fire(callback => callback(value, previous));
     }
 

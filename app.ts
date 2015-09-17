@@ -202,8 +202,11 @@ class ThingViewModel {
 
         this.setupProgressEvent();
 
-        u(Inventory.GetCountEvent(this.thingName).Register(newCount => {
+        u(game.Model(this.thingName).Count.Event().Register(newCount => {
             this.Count.Set(newCount);
+        }));
+
+        u(game.Model(this.thingName).Price.Event().Register(() => {
             this.ButtonText.Set(this.calculateButtonText());
         }));
 
@@ -331,6 +334,8 @@ class ThingModel {
         if (this.Entity.Capacity.Get() !== -1) {
             this.components.push(new CapacityComponent(this, this.gameState));
         }
+
+        this.components.push(new CostComponent(this, this.gameState));
     }
 
     // Can be shown to the user
@@ -348,7 +353,7 @@ class ThingModel {
     public Capacity: Property<number>;
 
     // the price of buying one additional thing of this type
-    public Price: Property<{ [thingName: string]: number }>;
+    public Price: Property<NumberMap>;
 
     // Purchase one of this type
     public Buy() {
@@ -383,17 +388,68 @@ class ThingModel {
 
 class Component {
     constructor(protected thingModel: ThingModel, protected gameState: GameState) {
+        this.entity = this.thingModel.Entity;
     }
 
     Dispose() { }
+
+    protected entity: Entity;
+}
+
+class CostComponent extends Component {
+    constructor(protected thingModel: ThingModel, protected gameState: GameState) {
+        super(thingModel, gameState);
+
+        this.updateCost();
+
+        var unreg = this.thingModel.Count.Event().Register(() => this.updateCost());
+        var unreg2 = gameState.GetEvent().Register(() => this.updateCost());
+
+        this.cleanupComponent = () => {
+            unreg();
+            unreg2();
+        }
+    }
+
+    // call this when you're getting rid of this component
+    public Dispose() {
+        this.cleanupComponent();
+    }
+
+    private updateCost() {
+        var cost = this.entity.Cost.Get();
+        if (!cost) {
+            return {};
+        }
+
+        var ratio = this.entity.CostRatio.Get();
+        if (ratio === 0) {
+            this.thingModel.Price.Set(cost);
+            return;
+        }
+
+        if (!ratio) {
+            ratio = 1.15;
+        }
+
+        var currentPrice = <NumberMap>{};
+        var count = this.thingModel.Count.Get();
+        var multiplier = Math.pow(ratio, count);
+
+        Object.keys(cost).forEach(thingName => {
+            currentPrice[thingName] = Math.floor(cost[thingName] * multiplier);
+        });
+
+        this.thingModel.Price.Set(currentPrice);
+    }
+
+    private cleanupComponent: () => void;
 }
 
 class CapacityComponent extends Component {
 
     constructor(protected thingModel: ThingModel, protected gameState: GameState) {
         super(thingModel, gameState);
-
-        this.entity = this.thingModel.Entity;
 
         this.refresh();
         this.updateCapacity();
@@ -471,8 +527,6 @@ class CapacityComponent extends Component {
     private calculateCapacityRevealed: () => boolean;
     private cleanupComponent: () => void;
     private refreshCleanup: () => void = () => { };
-
-    private entity: Entity;
 }
 
 module Inventory {
@@ -682,8 +736,6 @@ module Inventory {
 
     var enabledTable: { [index: string]: boolean } = {};
 }
-
-var cellClass = 'col-sm-2';
 
 function createElementsForEntity(thingName: string) {
     if (Inventory.IsRevealed(thingName)) {

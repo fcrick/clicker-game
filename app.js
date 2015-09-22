@@ -233,7 +233,7 @@ var ThingModel = (function () {
     ThingModel.prototype.saveEvents = function () {
         var _this = this;
         // need cleanup
-        this.CapacityRevealed.Event().Register(function (reveal) { return saveData[_this.thingName].IsCapShown = reveal; });
+        this.CapacityRevealed.Event().Register(function (reveal) { return saveData.Stuff[_this.thingName].IsCapShown = reveal; });
     };
     ThingModel.prototype.legacyEvents = function () {
         var _this = this;

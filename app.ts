@@ -67,7 +67,7 @@ class Entity {
         return this.name;
     }
 
-    private name;
+    private name: string;
 
     public Display: Property<string>;
     public Title: Property<string>;
@@ -389,7 +389,7 @@ class ThingModel {
 
     saveEvents() {
         // need cleanup
-        this.CapacityRevealed.Event().Register(reveal => saveData[this.thingName].IsCapShown = reveal);
+        this.CapacityRevealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsCapShown = reveal);
     }
 
     legacyEvents() {
@@ -438,8 +438,8 @@ class CostComponent extends Component {
     }
 
     private refresh() {
-        var unregs = [];
-        var u = unreg => unregs.push(unreg);
+        var unregs: { (): void; }[] = [];
+        var u = (unreg: { (): void; }) => unregs.push(unreg);
 
         var cost = this.entity.Cost.Get();
         if (cost) {
@@ -549,8 +549,8 @@ class CapacityComponent extends Component {
 
         this.calculateCapacityRevealed = () => this.thingModel.Count.Get() > this.thingModel.Capacity.Get();
 
-        var unregs = [];
-        var u = unreg => unregs.push(unreg);
+        var unregs: { (): void; }[] = [];
+        var u = (unreg: { (): void; }) => unregs.push(unreg);
 
         affecting.forEach(affected =>
             u(this.gameState.Model(affected).Count.Event()
@@ -796,17 +796,17 @@ function createThingRow(thingName: string) {
 
     var entity = entityByName[thingName];
 
-    var toUnload = [];
+    var toUnload: { (): void; }[] = [];
 
     m.mount(newDiv, {
         controller: () => {
-            onunload: e => toUnload.forEach(u => u());
+            onunload: (e: { (): void; }) => toUnload.forEach(u => u());
         },
         view: () => thingRow.view(thingViewModels.GetViewModel(entity))
     });
 
     var redraw = () => m.redraw();
-    var u = unreg => toUnload.push(unreg);
+    var u = (unreg: { (): void; }) => toUnload.push(unreg);
 
     var vm = thingViewModels.GetViewModel(entity);
 
@@ -830,7 +830,7 @@ function createThingRow(thingName: string) {
     });
 }
 
-function tryBuy(thingToBuy) {
+function tryBuy(thingToBuy: string) {
     var thingModel = game.Model(thingToBuy);
     var price = thingModel.Price.Get();
 

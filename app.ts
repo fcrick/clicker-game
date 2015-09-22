@@ -32,14 +32,14 @@ resetButton.addEventListener('click', resetEverything, false);
 // - enforce display ordering so reloading the page doesn't change the order
 // - highlights when a button is hovered
 
-interface SaveThingInfo {
+interface ThingSaveData {
     Count: number;
     IsRevealed: boolean;
     IsCapShown: boolean;
 }
 
 interface SaveData {
-    Stuff: { [index: string]: SaveThingInfo };
+    Stuff: { [index: string]: ThingSaveData };
 };
 
 var saveData: SaveData;
@@ -48,7 +48,7 @@ interface NumberMap {
     [thingName: string]: number;
 };
 
-interface ThingType {
+interface ThingTypeData {
     name: string;
     display?: string; // things without display are never shown
     title?: string; // tooltip display
@@ -62,7 +62,7 @@ interface ThingType {
     progressThing?: string; // value is name of thing to show percentage of
 }
 
-class Entity {
+class ThingType {
     public GetName() {
         return this.name;
     }
@@ -80,7 +80,7 @@ class Entity {
     public IncomeWhenZeroed: Property<NumberMap>;
     public ProgressThing: Property<string>;
 
-    constructor(tt: ThingType) {
+    constructor(tt: ThingTypeData) {
         this.name = tt.name;
         this.Display = new Property(tt.display);
         this.Title = new Property(tt.title);
@@ -98,7 +98,7 @@ class Entity {
 class ThingViewModelCollection {
     private viewModels: { [thingName: string]: ThingViewModel } = {};
 
-    public AddEntities(entities: Entity[]) {
+    public AddEntities(entities: ThingType[]) {
         entities.forEach(entity => {
             var thingName = entity.GetName();
 
@@ -120,7 +120,7 @@ class ThingViewModelCollection {
         return Object.keys(this.viewModels).map(key => this.viewModels[key]);
     }
 
-    public GetViewModel(entity: Entity) {
+    public GetViewModel(entity: ThingType) {
         return this.viewModels[entity.GetName()];
     }
 }
@@ -139,7 +139,7 @@ class ThingViewModel {
 
     public Buy = () => tryBuy(this.entity.GetName());
 
-    constructor(private entity: Entity) {
+    constructor(private entity: ThingType) {
         this.thingName = entity.GetName();
 
         // fill in initial values
@@ -275,7 +275,7 @@ class GameState {
         return this.gameEvent;
     }
 
-    public addEntities(entities: Entity[], saveData: SaveData) {
+    public addEntities(entities: ThingType[], saveData: SaveData) {
         var initialize = () => { };
 
         entities.forEach(entity => {
@@ -302,10 +302,10 @@ class GameState {
         this.gameEvent.Fire(callback => callback());
     }
 
-    private entities: Entity[];
+    private entities: ThingType[];
     private thingNames: string[];
     private entityLookup: {
-        [thingName: string]: Entity;
+        [thingName: string]: ThingType;
     }
 
     private models: ThingModel[];
@@ -318,8 +318,8 @@ class GameState {
 
 class ThingModel {
     constructor(
-        public Entity: Entity,
-        saveData: SaveThingInfo,
+        public Entity: ThingType,
+        saveData: ThingSaveData,
         private gameState: GameState
     ) {
         this.thingName = this.Entity.GetName();
@@ -364,7 +364,7 @@ class ThingModel {
     public Buy() {
     }
 
-    createProperties(saveData: SaveThingInfo) {
+    createProperties(saveData: ThingSaveData) {
         // values from the game save
         this.Revealed = new Property(saveData.IsRevealed);
         this.CapacityRevealed = new Property(saveData.IsCapShown);
@@ -409,7 +409,7 @@ class Component {
 
     Dispose() { }
 
-    protected entity: Entity;
+    protected entity: ThingType;
 }
 
 class CostComponent extends Component {
@@ -589,11 +589,11 @@ class CapacityComponent extends Component {
 }
 
 module Inventory {
-    export function Initialize(entities: Entity[]) {
+    export function Initialize(entities: ThingType[]) {
         entities.forEach(entity => initializeEntity(entity));
     }
 
-    function initializeRevealEnabled(entity: Entity) {
+    function initializeRevealEnabled(entity: ThingType) {
         if (!entity.Display.Get()) {
             return;
         }
@@ -607,7 +607,7 @@ module Inventory {
         }
     }
 
-    function initializeEntity(entity: Entity) {
+    function initializeEntity(entity: ThingType) {
         var thingName = entity.GetName();
 
         var registerCostEvents = () => {
@@ -897,13 +897,13 @@ function onLoad() {
     }
     catch (e) { }
 
-    var entities = definitions.map(thingType => new Entity(thingType));
+    var entities = definitions.map(thingType => new ThingType(thingType));
     addNewEntities(entities);
 
     setInterval(onInterval, 200);
 }
 
-function addNewEntities(entities: Entity[]) {
+function addNewEntities(entities: ThingType[]) {
     entities.forEach(entity => entityByName[entity.GetName()] = entity);
     initializeSaveData();
     game.addEntities(entities, saveData);
@@ -916,16 +916,16 @@ function addNewEntities(entities: Entity[]) {
 
 // i think i need something that will fire when the page finished loading
 window.onload = onLoad;
-var entityByName: { [index: string]: Entity } = {};
+var entityByName: { [index: string]: ThingType } = {};
 var thingViewModels = new ThingViewModelCollection();
 var game = new GameState();
 
 // for debugging
-var things: { [index: string]: Entity } = {};
+var things: { [index: string]: ThingType } = {};
 var nextId = 1;
 
 function Add(display: string) {
-    var newThingType: ThingType = {
+    var newThingType: ThingTypeData = {
         name: '',
         capacity: -1,
         cost: {
@@ -939,7 +939,7 @@ function Add(display: string) {
     newThingType['name'] = 'tt-Custom' + nextId++;
     newThingType['display'] = display;
 
-    addNewEntities([new Entity(newThingType)]);
+    addNewEntities([new ThingType(newThingType)]);
 }
 
 function ReAddAll() {
@@ -957,7 +957,7 @@ function ReAddAll() {
 
         return JSON.parse(json);
     });
-    var entities = newDefs.map(thingType => new Entity(thingType));
+    var entities = newDefs.map(thingType => new ThingType(thingType));
     addNewEntities(entities);
 
     definitions = newDefs;

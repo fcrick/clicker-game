@@ -14,8 +14,8 @@ resetButton.addEventListener('click', resetEverything, false);
 ;
 var saveData;
 ;
-var Entity = (function () {
-    function Entity(tt) {
+var ThingType = (function () {
+    function ThingType(tt) {
         this.name = tt.name;
         this.Display = new Property(tt.display);
         this.Title = new Property(tt.title);
@@ -28,10 +28,10 @@ var Entity = (function () {
         this.IncomeWhenZeroed = new Property(tt.incomeWhenZeroed);
         this.ProgressThing = new Property(tt.progressThing);
     }
-    Entity.prototype.GetName = function () {
+    ThingType.prototype.GetName = function () {
         return this.name;
     };
-    return Entity;
+    return ThingType;
 })();
 var ThingViewModelCollection = (function () {
     function ThingViewModelCollection() {
@@ -650,7 +650,7 @@ function onLoad() {
         saveData = JSON.parse(localStorage['SaveData']);
     }
     catch (e) { }
-    var entities = definitions.map(function (thingType) { return new Entity(thingType); });
+    var entities = definitions.map(function (thingType) { return new ThingType(thingType); });
     addNewEntities(entities);
     setInterval(onInterval, 200);
 }
@@ -684,7 +684,7 @@ function Add(display) {
     };
     newThingType['name'] = 'tt-Custom' + nextId++;
     newThingType['display'] = display;
-    addNewEntities([new Entity(newThingType)]);
+    addNewEntities([new ThingType(newThingType)]);
 }
 function ReAddAll() {
     var oldNames = definitions.map(function (thingType) { return thingType.name; });
@@ -697,7 +697,7 @@ function ReAddAll() {
         });
         return JSON.parse(json);
     });
-    var entities = newDefs.map(function (thingType) { return new Entity(thingType); });
+    var entities = newDefs.map(function (thingType) { return new ThingType(thingType); });
     addNewEntities(entities);
     definitions = newDefs;
 }

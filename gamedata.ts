@@ -1,6 +1,6 @@
 ﻿/// <reference path="app.ts"/>
 
-var definitions = <ThingType[]>[
+var definitions = <ThingTypeData[]>[
     {
         name: 'tt-Point',
         display: 'Beer',

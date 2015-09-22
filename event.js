@@ -33,13 +33,26 @@ var Property = (function () {
         return this.current;
     };
     Property.prototype.Set = function (value) {
+        var _this = this;
+        if (typeof value === "function") {
+            setTimeout(function () {
+                var val = value();
+                _this.setValue(val);
+            });
+        }
+        else {
+            this.setValue(value);
+        }
+    };
+    Property.prototype.setValue = function (value) {
+        var _this = this;
         if (this.current === value && this.hasFired) {
             return;
         }
+        this.hasFired = true;
         var previous = this.current;
         this.current = value;
-        this.hasFired = true;
-        this.event.Fire(function (callback) { return callback(value, previous); });
+        this.event.Fire(function (callback) { return callback(_this.current, previous); });
     };
     Property.prototype.Event = function () {
         return this.event;

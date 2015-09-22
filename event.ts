@@ -42,15 +42,28 @@ class Property<T> {
         return this.current;
     }
 
-    public Set(value: T) {
+    public Set(value: T | { (): T }) {
+        if (typeof value === "function") {
+            setTimeout(() => {
+                var val = (<{ (): T }>value)();
+                this.setValue(val);
+            });
+        }
+        else {
+            this.setValue(<T>value);
+        }
+    }
+
+    private setValue(value: T) {
         if (this.current === value && this.hasFired) {
             return;
         }
 
-        var previous = this.current;
-        this.current = value;
         this.hasFired = true;
-        this.event.Fire(callback => callback(value, previous));
+
+        var previous = this.current;
+        this.current = <T>value;
+        this.event.Fire(callback => callback(this.current, previous));
     }
 
     public Event() {

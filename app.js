@@ -199,6 +199,7 @@ var ThingModel = (function () {
         this.gameState = gameState;
         this.thingName = this.Type.GetName();
         this.createProperties(saveData);
+        this.saveEvents();
     }
     // should be called only once all models are created
     ThingModel.prototype.Initialize = function () {
@@ -238,14 +239,15 @@ var ThingModel = (function () {
         this.Price = new Property({});
         // calculated properties
         this.Purchasable = new Property(false);
-        var updatePurchable = function () { return _this.Purchasable.Set(_this.CanAfford.Get() && !_this.AtCapacity.Get()); };
-        this.CanAfford.Event().Register(updatePurchable);
-        this.AtCapacity.Event().Register(updatePurchable);
+        var updatePurchasable = function () { return _this.Purchasable.Set(_this.CanAfford.Get() && !_this.AtCapacity.Get()); };
+        this.CanAfford.Event().Register(updatePurchasable);
+        this.AtCapacity.Event().Register(updatePurchasable);
     };
     ThingModel.prototype.saveEvents = function () {
         var _this = this;
-        // need cleanup
         this.CapacityRevealed.Event().Register(function (reveal) { return saveData.Stuff[_this.thingName].IsCapShown = reveal; });
+        this.Revealed.Event().Register(function (reveal) { return saveData.Stuff[_this.thingName].IsRevealed = reveal; });
+        this.Count.Event().Register(function (count) { return saveData.Stuff[_this.thingName].Count = count; });
     };
     return ThingModel;
 })();

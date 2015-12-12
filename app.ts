@@ -327,6 +327,8 @@ class ThingModel {
         this.thingName = this.Type.GetName();
 
         this.createProperties(saveData);
+
+        this.saveEvents();
     }
 
     // should be called only once all models are created
@@ -394,17 +396,18 @@ class ThingModel {
 
         // calculated properties
         this.Purchasable = new Property(false);
-        var updatePurchable = () => this.Purchasable.Set(
+        var updatePurchasable = () => this.Purchasable.Set(
             this.CanAfford.Get() && !this.AtCapacity.Get()
             );
 
-        this.CanAfford.Event().Register(updatePurchable);
-        this.AtCapacity.Event().Register(updatePurchable);
+        this.CanAfford.Event().Register(updatePurchasable);
+        this.AtCapacity.Event().Register(updatePurchasable);
     }
 
     saveEvents() {
-        // need cleanup
         this.CapacityRevealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsCapShown = reveal);
+        this.Revealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsRevealed = reveal);
+        this.Count.Event().Register(count => saveData.Stuff[this.thingName].Count = count);
     }
 
     private thingName: string;

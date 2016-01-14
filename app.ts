@@ -337,6 +337,10 @@ class ThingModel {
             new CostComponent(this, this.gameState),
             new CapacityComponent(this, this.gameState),
         ];
+
+        if (this.Count.Get() > 0 || this.Purchasable.Get()) {
+            this.Revealed.Set(true);
+        }
     }
 
     public Reset() {
@@ -398,10 +402,17 @@ class ThingModel {
         this.Purchasable = new Property(false);
         var updatePurchasable = () => this.Purchasable.Set(
             this.CanAfford.Get() && !this.AtCapacity.Get()
-            );
+        );
 
         this.CanAfford.Event().Register(updatePurchasable);
         this.AtCapacity.Event().Register(updatePurchasable);
+
+        // show if we have any, or can buy any
+        var updateRevealed = () => this.Revealed.Set(
+            this.Count.Get() > 0 || this.Purchasable.Get()
+        );
+        this.Count.Event().Register(updateRevealed);
+        this.Purchasable.Event().Register(updateRevealed);
     }
 
     saveEvents() {
@@ -638,53 +649,53 @@ module Inventory {
         entities.forEach(entity => initializeEntity(entity));
     }
 
-    function initializeRevealEnabled(entity: ThingType) {
-        if (!entity.Display.Get()) {
-            return;
-        }
+    //function initializeRevealEnabled(entity: ThingType) {
+    //    if (!entity.Display.Get()) {
+    //        return;
+    //    }
 
-        var thingName = entity.GetName()
-        var model = game.Model(thingName);
-        var purchasable = model.Purchasable.Get();
+    //    var thingName = entity.GetName()
+    //    var model = game.Model(thingName);
+    //    var purchasable = model.Purchasable.Get();
 
-        var count = model.Count.Get();
-        if (count > 0 || purchasable) {
-            SetReveal(thingName, true);
-        }
-    }
+    //    var count = model.Count.Get();
+    //    if (count > 0 || purchasable) {
+    //        SetReveal(thingName, true);
+    //    }
+    //}
 
     function initializeEntity(thingType: ThingType) {
         var thingName = thingType.GetName();
 
-        var registerCostEvents = () => {
-            var unregs: { (): void }[] = [];
-            var u = (unreg: { (): void; }) => unregs.push(unreg);
+        //var registerCostEvents = () => {
+        //    var unregs: { (): void }[] = [];
+        //    var u = (unreg: { (): void; }) => unregs.push(unreg);
 
-            var model = game.Model(thingName);
-            var price = model.Price.Get();
-            var callback = () => initializeRevealEnabled(thingType);
+        //    var model = game.Model(thingName);
+        //    var price = model.Price.Get();
+        //    var callback = () => initializeRevealEnabled(thingType);
 
-            Object.keys(price).forEach(needed => {
-                u(game.Model(needed).Count.Event().Register(callback));
-            });
+        //    Object.keys(price).forEach(needed => {
+        //        u(game.Model(needed).Count.Event().Register(callback));
+        //    });
 
-            u(model.Count.Event().Register(callback));
-            u(game.Model(thingName).Capacity.Event().Register(callback));
+        //    u(model.Count.Event().Register(callback));
+        //    u(game.Model(thingName).Capacity.Event().Register(callback));
 
-            callback();
+        //    callback();
 
-            if (unregs.length > 0) {
-                costEventMap[thingName] = unregs;
-            }
-        }
+        //    if (unregs.length > 0) {
+        //        costEventMap[thingName] = unregs;
+        //    }
+        //}
 
-        registerCostEvents();
+        //registerCostEvents();
 
-        thingType.Cost.Event().Register(capacityEffects => {
-            costEventMap[thingName].forEach(unreg => unreg());
-            delete costEventMap[thingName];
-            registerCostEvents();
-        });
+        //thingType.Cost.Event().Register(capacityEffects => {
+        //    costEventMap[thingName].forEach(unreg => unreg());
+        //    delete costEventMap[thingName];
+        //    registerCostEvents();
+        //});
     }
 
     var costEventMap: { [index: string]: { (): void }[] } = {};

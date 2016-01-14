@@ -207,6 +207,9 @@ var ThingModel = (function () {
             new CostComponent(this, this.gameState),
             new CapacityComponent(this, this.gameState),
         ];
+        if (this.Count.Get() > 0 || this.Purchasable.Get()) {
+            this.Revealed.Set(true);
+        }
     };
     ThingModel.prototype.Reset = function () {
         this.Revealed.Set(false);
@@ -242,6 +245,10 @@ var ThingModel = (function () {
         var updatePurchasable = function () { return _this.Purchasable.Set(_this.CanAfford.Get() && !_this.AtCapacity.Get()); };
         this.CanAfford.Event().Register(updatePurchasable);
         this.AtCapacity.Event().Register(updatePurchasable);
+        // show if we have any, or can buy any
+        var updateRevealed = function () { return _this.Revealed.Set(_this.Count.Get() > 0 || _this.Purchasable.Get()); };
+        this.Count.Event().Register(updateRevealed);
+        this.Purchasable.Event().Register(updateRevealed);
     };
     ThingModel.prototype.saveEvents = function () {
         var _this = this;
@@ -439,42 +446,42 @@ var Inventory;
         entities.forEach(function (entity) { return initializeEntity(entity); });
     }
     Inventory.Initialize = Initialize;
-    function initializeRevealEnabled(entity) {
-        if (!entity.Display.Get()) {
-            return;
-        }
-        var thingName = entity.GetName();
-        var model = game.Model(thingName);
-        var purchasable = model.Purchasable.Get();
-        var count = model.Count.Get();
-        if (count > 0 || purchasable) {
-            SetReveal(thingName, true);
-        }
-    }
+    //function initializeRevealEnabled(entity: ThingType) {
+    //    if (!entity.Display.Get()) {
+    //        return;
+    //    }
+    //    var thingName = entity.GetName()
+    //    var model = game.Model(thingName);
+    //    var purchasable = model.Purchasable.Get();
+    //    var count = model.Count.Get();
+    //    if (count > 0 || purchasable) {
+    //        SetReveal(thingName, true);
+    //    }
+    //}
     function initializeEntity(thingType) {
         var thingName = thingType.GetName();
-        var registerCostEvents = function () {
-            var unregs = [];
-            var u = function (unreg) { return unregs.push(unreg); };
-            var model = game.Model(thingName);
-            var price = model.Price.Get();
-            var callback = function () { return initializeRevealEnabled(thingType); };
-            Object.keys(price).forEach(function (needed) {
-                u(game.Model(needed).Count.Event().Register(callback));
-            });
-            u(model.Count.Event().Register(callback));
-            u(game.Model(thingName).Capacity.Event().Register(callback));
-            callback();
-            if (unregs.length > 0) {
-                costEventMap[thingName] = unregs;
-            }
-        };
-        registerCostEvents();
-        thingType.Cost.Event().Register(function (capacityEffects) {
-            costEventMap[thingName].forEach(function (unreg) { return unreg(); });
-            delete costEventMap[thingName];
-            registerCostEvents();
-        });
+        //var registerCostEvents = () => {
+        //    var unregs: { (): void }[] = [];
+        //    var u = (unreg: { (): void; }) => unregs.push(unreg);
+        //    var model = game.Model(thingName);
+        //    var price = model.Price.Get();
+        //    var callback = () => initializeRevealEnabled(thingType);
+        //    Object.keys(price).forEach(needed => {
+        //        u(game.Model(needed).Count.Event().Register(callback));
+        //    });
+        //    u(model.Count.Event().Register(callback));
+        //    u(game.Model(thingName).Capacity.Event().Register(callback));
+        //    callback();
+        //    if (unregs.length > 0) {
+        //        costEventMap[thingName] = unregs;
+        //    }
+        //}
+        //registerCostEvents();
+        //thingType.Cost.Event().Register(capacityEffects => {
+        //    costEventMap[thingName].forEach(unreg => unreg());
+        //    delete costEventMap[thingName];
+        //    registerCostEvents();
+        //});
     }
     var costEventMap = {};
     function SetReveal(thingName, revealed) {

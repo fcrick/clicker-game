@@ -1,3 +1,293 @@
+/// <reference path="app.ts"/>
+var definitions = [
+    {
+        name: 'tt-Point',
+        display: 'Beer',
+        capacity: 100,
+    },
+    {
+        name: 'tt-Scorer1',
+        display: 'Delivery Guy',
+        title: 'Delivers to you 1 Beer per tick',
+        capacity: -1,
+        cost: {
+            'tt-Point': 10,
+        },
+        income: {
+            'tt-Point': 1,
+        },
+    },
+    {
+        name: 'tt-Scorer2',
+        display: 'Microbrewery',
+        title: 'Makes a lot more Beer and stores Kegs',
+        capacity: -1,
+        cost: {
+            'tt-FixedPrice1': 25,
+        },
+        capacityEffect: {
+            'tt-PointHolder1': 25,
+        },
+        income: {
+            'tt-Point': 5,
+        },
+    },
+    {
+        name: 'tt-Scorer3',
+        display: 'Taxi Driver',
+        title: 'Earns Benjamins and skim a lot off the top',
+        capacity: 0,
+        cost: {
+            'tt-Point': 100,
+        },
+        income: {
+            'tt-FractionOfFixedPrice1': 10,
+        }
+    },
+    {
+        name: 'tt-PointHolder1',
+        display: 'Keg',
+        title: 'Increases Beer capacity',
+        capacity: 50,
+        cost: {
+            'tt-Point': 25,
+        },
+        capacityEffect: {
+            'tt-Point': 10,
+            'tt-FractionOfPointHolder1': 10,
+        },
+        progressThing: 'tt-FractionOfPointHolder1',
+    },
+    {
+        name: 'tt-PointHolder2',
+        display: 'Garage',
+        title: 'Holds taxis',
+        capacity: -1,
+        cost: {
+            'tt-FixedPrice1': 10,
+        },
+        costRatio: 1.3,
+        capacityEffect: {
+            'tt-Scorer3': 2,
+        }
+    },
+    {
+        name: 'tt-PointHolder3',
+        display: 'Swimming Pool',
+        title: 'A storage facility for Beer',
+        capacity: -1,
+        cost: {
+            'tt-Point': 400,
+        },
+        capacityEffect: {
+            'tt-Point': 200,
+        }
+    },
+    {
+        name: 'tt-PointHolder4',
+        display: 'Piggy Bank',
+        title: 'Increases Benjamin capacity',
+        capacity: -1,
+        cost: {
+            'tt-Point': 4000,
+        },
+        capacityEffect: {
+            'tt-FixedPrice1': 100,
+        },
+        progressThing: 'tt-FractionOfPointHolder4',
+    },
+    {
+        name: 'tt-FixedPrice1',
+        display: 'Benjamin',
+        title: 'One hundred dollar bills',
+        cost: {
+            'tt-Point': 250,
+        },
+        capacityEffect: {
+            'tt-FractionOfFixedPrice1': 1,
+        },
+        capacity: 100,
+        costRatio: 1,
+    },
+    {
+        name: 'tt-PointHolderMaker1',
+        display: 'Keg Delivery Guy',
+        title: 'Delivers free Kegs to you...eventually',
+        capacity: -1,
+        cost: {
+            'tt-FixedPrice1': 5,
+        },
+        income: {
+            'tt-FractionOfPointHolder1': 1,
+        }
+    },
+    {
+        name: 'tt-FractionOfPointHolder1',
+        capacity: 100,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-PointHolder1': 1,
+        }
+    },
+    {
+        name: 'tt-FractionOfFixedPrice1',
+        capacity: 50,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-FixedPrice1': 1,
+        }
+    },
+    {
+        name: 'tt-XpEarner',
+        capacity: -1,
+        display: "Macrobrewery",
+        income: {
+            'tt-Click': 1,
+        },
+        cost: {
+            'tt-Scorer2': 20,
+            'tt-PointHolder3': 10,
+            'tt-PointHolder4': 1,
+        },
+        capacityEffect: {
+            'tt-Click': 10000,
+        },
+    },
+    {
+        name: 'tt-Click',
+        capacity: 0,
+        display: "Click",
+    },
+    {
+        name: 'tt-Hero',
+        display: 'Hero',
+        title: 'Made of clicks. Finds Piggy Banks.',
+        capacity: -1,
+        cost: {
+            'tt-Click': 50,
+        },
+        income: {
+            'tt-FractionOfPointHolder4': 1,
+        },
+    },
+    {
+        name: 'tt-FractionOfPointHolder4',
+        capacity: 10000,
+        zeroAtCapacity: true,
+        incomeWhenZeroed: {
+            'tt-PointHolder4': 1,
+        }
+    },
+    {
+        name: 'tt-Scorer4',
+        display: 'Company',
+        title: 'Makes money',
+        capacity: -1,
+        cost: {
+            'tt-Hero': 20,
+        },
+        costRatio: 1.1,
+        income: {
+            'tt-FractionOfFixedPrice1': 1000,
+        }
+    },
+];
+/// <reference path="mithril.d.ts"/>
+/// <reference path="app.ts"/>
+/// <reference path="gamedata.ts"/>
+var GameEvent = (function () {
+    function GameEvent() {
+        this.callbacks = [];
+    }
+    GameEvent.prototype.Register = function (callback) {
+        var _this = this;
+        this.callbacks.push(callback);
+        return function () { return _this.unregister(callback); };
+    };
+    GameEvent.prototype.unregister = function (callback) {
+        var index = this.callbacks.indexOf(callback);
+        if (index === -1) {
+            return false;
+        }
+        this.callbacks.splice(index, 1);
+        return true;
+    };
+    GameEvent.prototype.Fire = function (caller) {
+        this.callbacks.forEach(function (callback) { return caller(callback); });
+    };
+    return GameEvent;
+})();
+var Property = (function () {
+    function Property(current) {
+        this.current = current;
+        this.hasFired = false;
+        this.event = new GameEvent();
+    }
+    Property.prototype.Get = function () {
+        return this.current;
+    };
+    Property.prototype.Set = function (value) {
+        var _this = this;
+        if (typeof value === "function") {
+            setTimeout(function () {
+                var val = value();
+                _this.setValue(val);
+            });
+        }
+        else {
+            this.setValue(value);
+        }
+    };
+    Property.prototype.setValue = function (value) {
+        var _this = this;
+        if (this.current === value && this.hasFired) {
+            return;
+        }
+        this.hasFired = true;
+        var previous = this.current;
+        this.current = value;
+        this.event.Fire(function (callback) { return callback(_this.current, previous); });
+    };
+    Property.prototype.Event = function () {
+        return this.event;
+    };
+    return Property;
+})();
+/// <reference path="mithril.d.ts"/>
+/// <reference path="app.ts"/>
+/// <reference path="gamedata.ts"/>
+var thingRow = {
+    view: function (vm) {
+        // row
+        return m('.row', { style: { display: 'flex', alignItems: 'center' } }, [
+            // name
+            m('.col-sm-2', [
+                m('div', {
+                    class: 'progress progress-bar',
+                    style: { width: Math.floor(vm.Progress.Get() * 500) / 10 + '%' },
+                }),
+                vm.DisplayText.Get()
+            ]),
+            // count
+            m('.col-sm-2', [
+                m('span', vm.Count.Get()),
+                vm.CapacityShown.Get() ? m('span', ' / ') : '',
+                vm.CapacityShown.Get() ? m('span', vm.Capacity.Get()) : '',
+            ]),
+            // button
+            m('.col-sm-2', [
+                m('button', {
+                    title: vm.ButtonTitle.Get(),
+                    class: 'btn btn-primary',
+                    disabled: !vm.ButtonEnabled.Get(),
+                    onclick: vm.Buy,
+                }, [
+                    vm.ButtonText.Get(),
+                ]),
+            ]),
+        ]);
+    }
+};
 /// <reference path="mithril.d.ts"/>
 /// <reference path="event.ts"/>
 /// <reference path="gamedata.ts"/>
@@ -40,10 +330,10 @@ var ThingViewModelCollection = (function () {
         var _this = this;
         entities.forEach(function (entity) {
             var thingName = entity.GetName();
-            if (Inventory.IsRevealed(thingName)) {
+            if (game.Model(thingName).Revealed.Get()) {
                 _this.viewModels[thingName] = new ThingViewModel(entity);
             }
-            Inventory.GetRevealEvent(thingName).Register(function (revealed) {
+            game.Model(thingName).Revealed.Event().Register(function (revealed) {
                 if (!revealed || _this.viewModels[thingName]) {
                     return;
                 }
@@ -207,11 +497,10 @@ var ThingModel = (function () {
             new CostComponent(this, this.gameState),
             new CapacityComponent(this, this.gameState),
         ];
-        if (this.Count.Get() > 0 || this.Purchasable.Get()) {
-            this.Revealed.Set(true);
-        }
+        this.Revealed.Set(this.shouldReveal());
     };
     ThingModel.prototype.Reset = function () {
+        this.everRevealed = false;
         this.Revealed.Set(false);
         this.Count.Set(0);
         this.CapacityRevealed.Set(false);
@@ -232,7 +521,9 @@ var ThingModel = (function () {
     ThingModel.prototype.createProperties = function (saveData) {
         var _this = this;
         // values from the game save
+        this.everRevealed = saveData.IsRevealed;
         this.Revealed = new Property(saveData.IsRevealed);
+        this.Revealed.Event().Register(function (reveal) { return _this.everRevealed = _this.everRevealed || reveal; });
         this.CapacityRevealed = new Property(saveData.IsCapShown);
         this.Count = new Property(saveData.Count);
         // derivative values
@@ -245,10 +536,20 @@ var ThingModel = (function () {
         var updatePurchasable = function () { return _this.Purchasable.Set(_this.CanAfford.Get() && !_this.AtCapacity.Get()); };
         this.CanAfford.Event().Register(updatePurchasable);
         this.AtCapacity.Event().Register(updatePurchasable);
+        var updateRevealed = function () { return _this.Revealed.Set(_this.shouldReveal()); };
         // show if we have any, or can buy any
-        var updateRevealed = function () { return _this.Revealed.Set(_this.Count.Get() > 0 || _this.Purchasable.Get()); };
         this.Count.Event().Register(updateRevealed);
         this.Purchasable.Event().Register(updateRevealed);
+    };
+    ThingModel.prototype.shouldReveal = function () {
+        // don't show things without display names
+        if (!entityByName[this.thingName].Display.Get()) {
+            return false;
+        }
+        if (this.everRevealed) {
+            return true;
+        }
+        return this.Count.Get() > 0 || this.Purchasable.Get();
     };
     ThingModel.prototype.saveEvents = function () {
         var _this = this;
@@ -440,99 +741,17 @@ var CapacityComponent = (function (_super) {
     };
     return CapacityComponent;
 })(Component);
-var Inventory;
-(function (Inventory) {
-    function Initialize(entities) {
-        entities.forEach(function (entity) { return initializeEntity(entity); });
-    }
-    Inventory.Initialize = Initialize;
-    //function initializeRevealEnabled(entity: ThingType) {
-    //    if (!entity.Display.Get()) {
-    //        return;
-    //    }
-    //    var thingName = entity.GetName()
-    //    var model = game.Model(thingName);
-    //    var purchasable = model.Purchasable.Get();
-    //    var count = model.Count.Get();
-    //    if (count > 0 || purchasable) {
-    //        SetReveal(thingName, true);
-    //    }
-    //}
-    function initializeEntity(thingType) {
-        var thingName = thingType.GetName();
-        //var registerCostEvents = () => {
-        //    var unregs: { (): void }[] = [];
-        //    var u = (unreg: { (): void; }) => unregs.push(unreg);
-        //    var model = game.Model(thingName);
-        //    var price = model.Price.Get();
-        //    var callback = () => initializeRevealEnabled(thingType);
-        //    Object.keys(price).forEach(needed => {
-        //        u(game.Model(needed).Count.Event().Register(callback));
-        //    });
-        //    u(model.Count.Event().Register(callback));
-        //    u(game.Model(thingName).Capacity.Event().Register(callback));
-        //    callback();
-        //    if (unregs.length > 0) {
-        //        costEventMap[thingName] = unregs;
-        //    }
-        //}
-        //registerCostEvents();
-        //thingType.Cost.Event().Register(capacityEffects => {
-        //    costEventMap[thingName].forEach(unreg => unreg());
-        //    delete costEventMap[thingName];
-        //    registerCostEvents();
-        //});
-    }
-    var costEventMap = {};
-    function SetReveal(thingName, revealed) {
-        var current = saveData.Stuff[thingName].IsRevealed;
-        if (current === revealed) {
-            return;
-        }
-        saveData.Stuff[thingName].IsRevealed = revealed;
-        revealEvent.FireEvent(thingName, function (callback) { return callback(revealed); });
-    }
-    Inventory.SetReveal = SetReveal;
-    function IsRevealed(thingName) {
-        if (!entityByName[thingName].Display.Get()) {
-            return false;
-        }
-        return saveData.Stuff[thingName].IsRevealed;
-    }
-    Inventory.IsRevealed = IsRevealed;
-    ;
-    var ThingEvent = (function () {
-        function ThingEvent() {
-            this.eventTable = {};
-        }
-        ThingEvent.prototype.GetEvent = function (thingName) {
-            var event = this.eventTable[thingName];
-            if (!event) {
-                event = this.eventTable[thingName] = new GameEvent();
-            }
-            return event;
-        };
-        ThingEvent.prototype.FireEvent = function (thingName, caller) {
-            var event = this.eventTable[thingName];
-            if (event)
-                event.Fire(caller);
-        };
-        return ThingEvent;
-    })();
-    // for showing that things exist at all
-    var revealEvent = new ThingEvent();
-    Inventory.GetRevealEvent = function (thingName) { return revealEvent.GetEvent(thingName); };
-})(Inventory || (Inventory = {}));
 function createElementsForEntity(thingName) {
-    if (Inventory.IsRevealed(thingName)) {
+    var model = game.Model(thingName);
+    if (model.Revealed.Get()) {
         createThingRow(thingName);
     }
-    var create = function (reveal) {
-        if (reveal) {
+    var create = function (reveal, previous) {
+        if (reveal && !previous) {
             createThingRow(thingName);
         }
     };
-    Inventory.GetRevealEvent(thingName).Register(create);
+    model.Revealed.Event().Register(create);
 }
 function createThingRow(thingName) {
     var outerDiv = document.createElement('div');
@@ -562,7 +781,7 @@ function createThingRow(thingName) {
     u(vm.DisplayText.Event().Register(redraw));
     u(vm.Progress.Event().Register(redraw));
     var unregReveal;
-    unregReveal = Inventory.GetRevealEvent(thingName).Register(function (revealed) {
+    unregReveal = game.Model(thingName).Revealed.Event().Register(function (revealed) {
         if (revealed) {
             return;
         }
@@ -624,7 +843,6 @@ function addNewEntities(entities) {
     entities.forEach(function (entity) { return entityByName[entity.GetName()] = entity; });
     initializeSaveData();
     game.addEntities(entities, saveData);
-    Inventory.Initialize(entities);
     thingViewModels.AddEntities(entities);
     entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });
     Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].Display.Get()] = entityByName[thingName]; });
@@ -667,4 +885,3 @@ function ReAddAll() {
     addNewEntities(entities);
     definitions = newDefs;
 }
-//# sourceMappingURL=app.js.map

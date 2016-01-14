@@ -102,11 +102,11 @@ class ThingViewModelCollection {
         entities.forEach(entity => {
             var thingName = entity.GetName();
 
-            if (Inventory.IsRevealed(thingName)) {
+            if (game.Model(thingName).Revealed.Get()) {
                 this.viewModels[thingName] = new ThingViewModel(entity);
             }
 
-            Inventory.GetRevealEvent(thingName).Register((revealed: boolean) => {
+            game.Model(thingName).Revealed.Event().Register((revealed: boolean) => {
                 if (!revealed || this.viewModels[thingName]) {
                     return;
                 }
@@ -338,12 +338,11 @@ class ThingModel {
             new CapacityComponent(this, this.gameState),
         ];
 
-        if (this.Count.Get() > 0 || this.Purchasable.Get()) {
-            this.Revealed.Set(true);
-        }
+        this.Revealed.Set(this.shouldReveal());
     }
 
     public Reset() {
+        this.everRevealed = false;
         this.Revealed.Set(false);
         this.Count.Set(0);
         this.CapacityRevealed.Set(false);
@@ -351,6 +350,7 @@ class ThingModel {
 
     // Can be shown to the user
     public Revealed: Property<boolean>;
+    everRevealed: boolean;
 
     // Purchase can be attempted
     public Purchasable: Property<boolean>;
@@ -387,7 +387,10 @@ class ThingModel {
 
     createProperties(saveData: ThingSaveData) {
         // values from the game save
+        this.everRevealed = saveData.IsRevealed;
         this.Revealed = new Property(saveData.IsRevealed);
+        this.Revealed.Event().Register(reveal => this.everRevealed = this.everRevealed || reveal);
+        
         this.CapacityRevealed = new Property(saveData.IsCapShown);
         this.Count = new Property(saveData.Count);
 
@@ -406,15 +409,27 @@ class ThingModel {
 
         this.CanAfford.Event().Register(updatePurchasable);
         this.AtCapacity.Event().Register(updatePurchasable);
+        
+        var updateRevealed = () => this.Revealed.Set(this.shouldReveal());
 
         // show if we have any, or can buy any
-        var updateRevealed = () => this.Revealed.Set(
-            this.Count.Get() > 0 || this.Purchasable.Get()
-        );
         this.Count.Event().Register(updateRevealed);
         this.Purchasable.Event().Register(updateRevealed);
     }
-
+    
+    shouldReveal() {
+        // don't show things without display names
+        if (!entityByName[this.thingName].Display.Get()) {
+            return false;
+        }
+            
+        if (this.everRevealed) {
+            return true;
+        }
+            
+        return this.Count.Get() > 0 || this.Purchasable.Get(); 
+    }
+    
     saveEvents() {
         this.CapacityRevealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsCapShown = reveal);
         this.Revealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsRevealed = reveal);
@@ -644,117 +659,19 @@ class CapacityComponent extends Component {
     private refreshCleanup: () => void = () => { };
 }
 
-module Inventory {
-    export function Initialize(entities: ThingType[]) {
-        entities.forEach(entity => initializeEntity(entity));
-    }
-
-    //function initializeRevealEnabled(entity: ThingType) {
-    //    if (!entity.Display.Get()) {
-    //        return;
-    //    }
-
-    //    var thingName = entity.GetName()
-    //    var model = game.Model(thingName);
-    //    var purchasable = model.Purchasable.Get();
-
-    //    var count = model.Count.Get();
-    //    if (count > 0 || purchasable) {
-    //        SetReveal(thingName, true);
-    //    }
-    //}
-
-    function initializeEntity(thingType: ThingType) {
-        var thingName = thingType.GetName();
-
-        //var registerCostEvents = () => {
-        //    var unregs: { (): void }[] = [];
-        //    var u = (unreg: { (): void; }) => unregs.push(unreg);
-
-        //    var model = game.Model(thingName);
-        //    var price = model.Price.Get();
-        //    var callback = () => initializeRevealEnabled(thingType);
-
-        //    Object.keys(price).forEach(needed => {
-        //        u(game.Model(needed).Count.Event().Register(callback));
-        //    });
-
-        //    u(model.Count.Event().Register(callback));
-        //    u(game.Model(thingName).Capacity.Event().Register(callback));
-
-        //    callback();
-
-        //    if (unregs.length > 0) {
-        //        costEventMap[thingName] = unregs;
-        //    }
-        //}
-
-        //registerCostEvents();
-
-        //thingType.Cost.Event().Register(capacityEffects => {
-        //    costEventMap[thingName].forEach(unreg => unreg());
-        //    delete costEventMap[thingName];
-        //    registerCostEvents();
-        //});
-    }
-
-    var costEventMap: { [index: string]: { (): void }[] } = {};
-
-    export function SetReveal(thingName: string, revealed: boolean) {
-        var current = saveData.Stuff[thingName].IsRevealed;
-        if (current === revealed) {
-            return;
-        }
-
-        saveData.Stuff[thingName].IsRevealed = revealed;
-        revealEvent.FireEvent(thingName, callback => callback(revealed));
-    }
-
-    export function IsRevealed(thingName: string) {
-        if (!entityByName[thingName].Display.Get()) {
-            return false;
-        }
-
-        return saveData.Stuff[thingName].IsRevealed;
-    }
-
-    // event callback interfaces
-    interface ToggleCallback { (toggled: boolean): void; };
-
-    class ThingEvent<T> {
-        private eventTable: { [thingName: string]: GameEvent<T> } = {};
-        public GetEvent(thingName: string): IGameEvent<T> {
-            var event = this.eventTable[thingName];
-            if (!event) {
-                event = this.eventTable[thingName] = new GameEvent<T>();
-            }
-
-            return event;
-        }
-        public FireEvent(thingName: string, caller: (callback: T) => void) {
-            var event = this.eventTable[thingName];
-            if (event)
-                event.Fire(caller);
-        }
-    }
-
-    // for showing that things exist at all
-    var revealEvent = new ThingEvent<ToggleCallback>();
-    export var GetRevealEvent = (thingName: string) => revealEvent.GetEvent(thingName);
-}
-
 function createElementsForEntity(thingName: string) {
-    if (Inventory.IsRevealed(thingName)) {
+    var model = game.Model(thingName);
+    if (model.Revealed.Get()) {
         createThingRow(thingName);
     }
 
-    var create = (reveal: boolean) => {
-        if (reveal) {
+    var create = (reveal: boolean, previous: boolean) => {
+        if (reveal && !previous) {
             createThingRow(thingName);
         }
     }
 
-    Inventory.GetRevealEvent(thingName).Register(create);
+    model.Revealed.Event().Register(create);
 }
 
 function createThingRow(thingName: string) {
@@ -794,7 +711,7 @@ function createThingRow(thingName: string) {
     u(vm.Progress.Event().Register(redraw));
 
     var unregReveal: () => void;
-    unregReveal = Inventory.GetRevealEvent(thingName).Register(revealed => {
+    unregReveal = game.Model(thingName).Revealed.Event().Register(revealed => {
         if (revealed) {
             return;
         }
@@ -869,7 +786,6 @@ function addNewEntities(entities: ThingType[]) {
     entities.forEach(entity => entityByName[entity.GetName()] = entity);
     initializeSaveData();
     game.addEntities(entities, saveData);
-    Inventory.Initialize(entities);
     thingViewModels.AddEntities(entities);
     entities.forEach(entity => createElementsForEntity(entity.GetName()));
 

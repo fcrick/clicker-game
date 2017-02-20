@@ -84,16 +84,16 @@ class ThingType {
 
     constructor(tt: ThingTypeData) {
         this.name = tt.name;
-        this.Display = new Property(tt.display);
-        this.Title = new Property(tt.title);
-        this.Cost = new Property(tt.cost);
-        this.Capacity = new Property(tt.capacity);
-        this.Income = new Property(tt.income);
-        this.CapacityEffect = new Property(tt.capacityEffect);
-        this.CostRatio = new Property(tt.costRatio);
-        this.ZeroAtCapacity = new Property(tt.zeroAtCapacity);
-        this.IncomeWhenZeroed = new Property(tt.incomeWhenZeroed);
-        this.ProgressThing = new Property(tt.progressThing);
+        this.Display = Property.create(tt.display);
+        this.Title = Property.create(tt.title);
+        this.Cost = Property.create(tt.cost);
+        this.Capacity = Property.create(tt.capacity);
+        this.Income = Property.create(tt.income);
+        this.CapacityEffect = Property.create(tt.capacityEffect);
+        this.CostRatio = Property.create(tt.costRatio);
+        this.ZeroAtCapacity = Property.create(tt.zeroAtCapacity);
+        this.IncomeWhenZeroed = Property.create(tt.incomeWhenZeroed);
+        this.ProgressThing = Property.create(tt.progressThing);
     }
 }
 
@@ -104,7 +104,7 @@ class ThingViewModelCollection {
         entities.forEach(entity => {
             var thingName = entity.GetName();
 
-            if (game.Model(thingName).Revealed.Get()) {
+            if (game.Model(thingName).Revealed()) {
                 this.viewModels[thingName] = new ThingViewModel(entity);
             }
 
@@ -146,16 +146,16 @@ export class ThingViewModel {
         this.model = game.Model(this.thingName);
 
         // fill in initial values
-        this.DisplayText = new Property(this.thingType.Display.Get());
-        this.Progress = new Property(this.calculateProgress());
+        this.DisplayText = Property.create(this.thingType.Display());
+        this.Progress = Property.create(this.calculateProgress());
 
-        this.Count = new Property(this.model.Count.Get());
-        this.CapacityShown = new Property(this.model.CapacityRevealed.Get());
-        this.Capacity = new Property(this.model.Capacity.Get());
+        this.Count = Property.create(this.model.Count());
+        this.CapacityShown = Property.create(this.model.CapacityRevealed());
+        this.Capacity = Property.create(this.model.Capacity());
 
-        this.ButtonText = new Property(this.calculateButtonText());
-        this.ButtonEnabled = new Property(this.model.Purchasable.Get());
-        this.ButtonTitle = new Property(this.thingType.Title.Get());
+        this.ButtonText = Property.create(this.calculateButtonText());
+        this.ButtonEnabled = Property.create(this.model.Purchasable());
+        this.ButtonTitle = Property.create(this.thingType.Title());
 
         this.setupEvents();
     }
@@ -168,11 +168,11 @@ export class ThingViewModel {
         }
 
         // register new one if need
-        var progressThing = this.thingType.ProgressThing.Get();
+        var progressThing = this.thingType.ProgressThing();
         if (progressThing) {
             var progresModel = game.Model(progressThing);
-            this.progressUnreg = progresModel.Count.Event().Register(() => this.Progress.Set(this.calculateProgress()));
-            this.Progress.Set(this.calculateProgress());
+            this.progressUnreg = progresModel.Count.Event().Register(() => this.Progress(this.calculateProgress()));
+            this.Progress(this.calculateProgress());
         }
     }
 
@@ -185,7 +185,7 @@ export class ThingViewModel {
         var u = (callback: () => void) => this.costUnregs.push(callback);
 
         // change of name to anything in the cost of the entity
-        var cost = this.thingType.Cost.Get();
+        var cost = this.thingType.Cost();
         if (cost) {
             Object.keys(cost).forEach(costName => {
                 u(entityByName[costName].Display.Event().Register(() => this.calculateButtonText()));
@@ -200,53 +200,53 @@ export class ThingViewModel {
 
         // set up events so properties update correctly
         u(this.thingType.Display.Event().Register(newName => {
-            this.DisplayText.Set(newName);
-            this.ButtonText.Set(this.calculateButtonText());
+            this.DisplayText(newName);
+            this.ButtonText(this.calculateButtonText());
         }));
 
         this.setupProgressEvent();
 
         u(this.model.Count.Event().Register(() => {
-            this.Count.Set(() => this.model.Count.Get());
+            this.Count(() => this.model.Count());
         }));
 
         u(this.model.Price.Event().Register(() => {
-            this.ButtonText.Set(this.calculateButtonText());
+            this.ButtonText(this.calculateButtonText());
         }));
 
-        u(this.model.CapacityRevealed.Event().Register(reveal => this.CapacityShown.Set(reveal)));
-        u(this.model.Capacity.Event().Register(newCapacity => this.Capacity.Set(newCapacity)));
+        u(this.model.CapacityRevealed.Event().Register(reveal => this.CapacityShown(reveal)));
+        u(this.model.Capacity.Event().Register(newCapacity => this.Capacity(newCapacity)));
 
-        u(this.model.Purchasable.Event().Register(enabled => this.ButtonEnabled.Set(enabled)));
-        u(this.thingType.Title.Event().Register(newTitle => this.ButtonTitle.Set(newTitle)));
+        u(this.model.Purchasable.Event().Register(enabled => this.ButtonEnabled(enabled)));
+        u(this.thingType.Title.Event().Register(newTitle => this.ButtonTitle(newTitle)));
     }
 
     calculateProgress(): number {
-        var progressThing = this.thingType.ProgressThing.Get();
+        var progressThing = this.thingType.ProgressThing();
         if (!progressThing) {
             return 0;
         }
 
-        if (this.model.Count.Get() === this.model.Capacity.Get()) {
+        if (this.model.Count() === this.model.Capacity()) {
             return 0;
         }
 
         var progressModel = game.Model(progressThing);
 
-        return progressModel.Count.Get() / progressModel.Capacity.Get();
+        return progressModel.Count() / progressModel.Capacity();
     }
 
     calculateButtonText(): string {
-        var price = this.model.Price.Get();
+        var price = this.model.Price();
         var costString = Object.keys(price).map(thingName =>
-            price[thingName] + ' ' + entityByName[thingName].Display.Get()
+            price[thingName] + ' ' + entityByName[thingName].Display()
             ).join(', ');
 
         if (!costString) {
             costString = "FREE!";
         }
 
-        return 'Buy a ' + this.thingType.Display.Get() + ' for ' + costString;
+        return 'Buy a ' + this.thingType.Display() + ' for ' + costString;
     }
 
     private model: ThingModel;
@@ -340,14 +340,14 @@ class ThingModel {
             new CapacityComponent(this, this.gameState),
         ];
 
-        this.Revealed.Set(this.shouldReveal());
+        this.Revealed(this.shouldReveal());
     }
 
     public Reset() {
         this.everRevealed = false;
-        this.Revealed.Set(false);
-        this.Count.Set(0);
-        this.CapacityRevealed.Set(false);
+        this.Revealed(false);
+        this.Count(0);
+        this.CapacityRevealed(false);
     }
 
     // Can be shown to the user
@@ -372,47 +372,47 @@ class ThingModel {
 
     // Purchase one of this type
     public Buy() {
-        var price = this.Price.Get();
+        var price = this.Price();
 
-        if (!this.Purchasable.Get()) {
+        if (!this.Purchasable()) {
             return;
         }
 
         Object.keys(price).forEach(thingName => {
             var count = game.Model(thingName).Count;
-            var current = count.Get();
-            count.Set(current - price[thingName]);
+            var current = count();
+            count(current - price[thingName]);
         });
 
-        this.Count.Set(this.Count.Get() + 1);
+        this.Count(this.Count() + 1);
     }
 
     createProperties(saveData: ThingSaveData) {
         // values from the game save
         this.everRevealed = saveData.IsRevealed;
-        this.Revealed = new Property(saveData.IsRevealed);
+        this.Revealed = Property.create(saveData.IsRevealed);
         this.Revealed.Event().Register(reveal => this.everRevealed = this.everRevealed || reveal);
 
-        this.CapacityRevealed = new Property(saveData.IsCapShown);
-        this.Count = new Property(saveData.Count);
+        this.CapacityRevealed = Property.create(saveData.IsCapShown);
+        this.Count = Property.create(saveData.Count);
 
         // derivative values
-        this.CanAfford =  new Property(true);
-        this.AtCapacity = new Property(false);
+        this.CanAfford =  Property.create(true);
+        this.AtCapacity = Property.create(false);
 
-        this.Capacity = new Property(-1);
-        this.Price = new Property<NumberMap>({});
+        this.Capacity = Property.create(-1);
+        this.Price = Property.create<NumberMap>({});
 
         // calculated properties
-        this.Purchasable = new Property(false);
-        var updatePurchasable = () => this.Purchasable.Set(
-            this.CanAfford.Get() && !this.AtCapacity.Get()
+        this.Purchasable = Property.create(false);
+        var updatePurchasable = () => this.Purchasable(
+            this.CanAfford() && !this.AtCapacity()
         );
 
         this.CanAfford.Event().Register(updatePurchasable);
         this.AtCapacity.Event().Register(updatePurchasable);
 
-        var updateRevealed = () => this.Revealed.Set(this.shouldReveal());
+        var updateRevealed = () => this.Revealed(this.shouldReveal());
 
         // show if we have any, or can buy any
         this.Count.Event().Register(updateRevealed);
@@ -421,7 +421,7 @@ class ThingModel {
 
     shouldReveal() {
         // don't show things without display names
-        if (!entityByName[this.thingName].Display.Get()) {
+        if (!entityByName[this.thingName].Display()) {
             return false;
         }
 
@@ -429,7 +429,7 @@ class ThingModel {
             return true;
         }
 
-        return this.Count.Get() > 0 || this.Purchasable.Get();
+        return this.Count() > 0 || this.Purchasable();
     }
 
     saveEvents() {
@@ -481,7 +481,7 @@ class CostComponent extends Component {
         var unregs: { (): void; }[] = [];
         var u = (unreg: { (): void; }) => unregs.push(unreg);
 
-        var cost = this.type.Cost.Get();
+        var cost = this.type.Cost();
         if (cost) {
             Object.keys(cost).forEach(affected =>
                 u(this.gameState.Model(affected).Count.Event()
@@ -494,14 +494,14 @@ class CostComponent extends Component {
     }
 
     private updateCost() {
-        var cost = this.type.Cost.Get();
+        var cost = this.type.Cost();
         if (!cost) {
             return {};
         }
 
-        var ratio = this.type.CostRatio.Get();
+        var ratio = this.type.CostRatio();
         if (ratio === 0) {
-            this.model.Price.Set(cost);
+            this.model.Price(cost);
             return;
         }
 
@@ -510,29 +510,29 @@ class CostComponent extends Component {
         }
 
         var currentPrice = <NumberMap>{};
-        var count = this.model.Count.Get();
+        var count = this.model.Count();
         var multiplier = Math.pow(ratio, count);
 
         Object.keys(cost).forEach(thingName => {
             currentPrice[thingName] = Math.floor(cost[thingName] * multiplier);
         });
 
-        this.model.Price.Set(currentPrice);
+        this.model.Price(currentPrice);
 
         this.updateAffordability();
     }
 
     private updateAffordability() {
-        var price = this.model.Price.Get();
+        var price = this.model.Price();
 
         var canAfford = true;
         if (price) {
             canAfford = Object.keys(price).every(thingName =>
-                game.Model(thingName).Count.Get() >= price[thingName]
+                game.Model(thingName).Count() >= price[thingName]
                 );
         }
 
-        this.model.CanAfford.Set(canAfford);
+        this.model.CanAfford(canAfford);
     }
 
     private cleanupComponent: () => void;
@@ -566,7 +566,7 @@ class CapacityComponent extends Component {
         var effectTable: { [thingName: string]: number } = {};
 
         this.gameState.GetEntities().forEach(entity => {
-            var effects = entity.CapacityEffect.Get();
+            var effects = entity.CapacityEffect();
             if (!effects) {
                 return;
             }
@@ -577,17 +577,17 @@ class CapacityComponent extends Component {
             }
         });
 
-        var initial = this.type.Capacity.Get();
+        var initial = this.type.Capacity();
         var affecting = Object.keys(effectTable);
 
         this.calculateCapacity = () => affecting.reduce(
             (sum, affecting) => sum
-                + this.gameState.Model(affecting).Count.Get()
+                + this.gameState.Model(affecting).Count()
                 * effectTable[affecting],
             initial
             );
 
-        this.calculateCapacityRevealed = () => this.model.Count.Get() > this.model.Capacity.Get();
+        this.calculateCapacityRevealed = () => this.model.Count() > this.model.Capacity();
 
         var unregs: { (): void; }[] = [];
         var u = (unreg: { (): void; }) => unregs.push(unreg);
@@ -603,36 +603,36 @@ class CapacityComponent extends Component {
 
     private updateCapacity() {
         var capacity = this.calculateCapacity();
-        this.model.Capacity.Set(capacity);
+        this.model.Capacity(capacity);
         this.updateCapacityRevealed();
     }
 
     // called when the count of our owner changes
     private onCountChange(current: number, previous: number) {
-        var capacity = this.model.Capacity.Get();
+        var capacity = this.model.Capacity();
         if (capacity === -1) {
             return;
         }
 
         // check if we're over capacity
         var countProp = this.model.Count;
-        var count = countProp.Get();
+        var count = countProp();
         if (count >= capacity) {
             // check if we're a special zero-at-capacity type
-            if (this.type.ZeroAtCapacity.Get()) {
+            if (this.type.ZeroAtCapacity()) {
                 var timesOver = Math.floor(count / capacity);
 
-                countProp.Set(current - timesOver * capacity);
-                var income = this.type.IncomeWhenZeroed.Get();
+                countProp(current - timesOver * capacity);
+                var income = this.type.IncomeWhenZeroed();
                 if (income) {
                     Object.keys(income).forEach(earnedThing => {
                         var earnedCount = game.Model(earnedThing).Count;
-                        earnedCount.Set(earnedCount.Get() + income[earnedThing] * timesOver);
+                        earnedCount(earnedCount() + income[earnedThing] * timesOver);
                     });
                 }
             }
             else {
-                countProp.Set(capacity);
+                countProp(capacity);
             }
         }
 
@@ -640,18 +640,18 @@ class CapacityComponent extends Component {
     }
 
     private updateCapacityRevealed() {
-        var capacity = this.model.Capacity.Get();
+        var capacity = this.model.Capacity();
         if (capacity === -1) {
-            this.model.AtCapacity.Set(false);
-            this.model.CapacityRevealed.Set(false);
+            this.model.AtCapacity(false);
+            this.model.CapacityRevealed(false);
             return;
         }
 
-        var atCapacity = this.model.Count.Get() >= capacity;
-        this.model.AtCapacity.Set(atCapacity);
+        var atCapacity = this.model.Count() >= capacity;
+        this.model.AtCapacity(atCapacity);
 
         if (atCapacity) {
-            this.model.CapacityRevealed.Set(true);
+            this.model.CapacityRevealed(true);
         }
     }
 
@@ -663,7 +663,7 @@ class CapacityComponent extends Component {
 
 function createElementsForEntity(thingName: string) {
     var model = game.Model(thingName);
-    if (model.Revealed.Get()) {
+    if (model.Revealed()) {
         createThingRow(thingName);
     }
 
@@ -759,12 +759,12 @@ function onInterval() {
     Object.keys(entityByName).forEach(thingName => {
         var model = game.Model(thingName);
         var type = model.Type;
-        var income = type.Income.Get();
-        var count = game.Model(thingName).Count.Get();
+        var income = type.Income();
+        var count = game.Model(thingName).Count();
         if (income && count) {
             Object.keys(income).forEach(earnedName => {
                 var countProp = game.Model(earnedName).Count;
-                countProp.Set(countProp.Get() + income[earnedName] * count);
+                countProp(countProp() + income[earnedName] * count);
             });
         }
     });
@@ -791,7 +791,7 @@ function addNewEntities(entities: ThingType[]) {
     thingViewModels.AddEntities(entities);
     entities.forEach(entity => createElementsForEntity(entity.GetName()));
 
-    Object.keys(entityByName).forEach(thingName => things[entityByName[thingName].Display.Get()] = entityByName[thingName]);
+    Object.keys(entityByName).forEach(thingName => things[entityByName[thingName].Display()] = entityByName[thingName]);
 }
 
 // i think i need something that will fire when the page finished loading

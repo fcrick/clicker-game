@@ -209,25 +209,25 @@ define("views", ["require", "exports"], function (require, exports) {
                 m('.col-sm-2', [
                     m('div', {
                         "class": 'progress progress-bar',
-                        style: { width: Math.floor(vm.Progress.Get() * 500) / 10 + '%' }
+                        style: { width: Math.floor(vm.Progress() * 500) / 10 + '%' }
                     }),
-                    vm.DisplayText.Get()
+                    vm.DisplayText()
                 ]),
                 // count
                 m('.col-sm-2', [
-                    m('span', vm.Count.Get()),
-                    vm.CapacityShown.Get() ? m('span', ' / ') : '',
-                    vm.CapacityShown.Get() ? m('span', vm.Capacity.Get()) : '',
+                    m('span', vm.Count()),
+                    vm.CapacityShown() ? m('span', ' / ') : '',
+                    vm.CapacityShown() ? m('span', vm.Capacity()) : '',
                 ]),
                 // button
                 m('.col-sm-2', [
                     m('button', {
-                        title: vm.ButtonTitle.Get(),
+                        title: vm.ButtonTitle(),
                         "class": 'btn btn-primary',
-                        disabled: !vm.ButtonEnabled.Get(),
+                        disabled: !vm.ButtonEnabled(),
                         onclick: vm.Buy
                     }, [
-                        vm.ButtonText.Get(),
+                        vm.ButtonText(),
                     ]),
                 ]),
             ]);
@@ -259,32 +259,18 @@ define("event", ["require", "exports"], function (require, exports) {
         return GameEvent;
     }());
     exports.GameEvent = GameEvent;
-    var Property = (function () {
-        function Property(current) {
-            this.current = current;
+    // we use assign to merge this class and a callable object to get the interface
+    // we want.
+    var PropertyInternal = (function () {
+        function PropertyInternal() {
             this.hasFired = false;
-            this.event = new GameEvent();
         }
-        // public (value?: T | { (): T}): T {
-        //     // call with no argument to get, otherwise set
-        //     if (value === undefined) {
-        //         return this.current;
-        //     }
-        //     if (typeof value === "function") {
-        //         setTimeout(() => {
-        //             var val = (<{ (): T }>value)();
-        //             this.setValue(val);
-        //         });
-        //     }
-        //     else {
-        //         this.setValue(<T>value);
-        //     }
-        // }
-        Property.prototype.Get = function () {
-            return this.current;
-        };
-        Property.prototype.Set = function (value) {
+        PropertyInternal.prototype.getSet = function (value) {
             var _this = this;
+            // call with no argument to get, otherwise set
+            if (value === undefined) {
+                return this.current;
+            }
             if (typeof value === "function") {
                 setTimeout(function () {
                     var val = value();
@@ -295,23 +281,39 @@ define("event", ["require", "exports"], function (require, exports) {
                 this.setValue(value);
             }
         };
-        Property.prototype.setValue = function (value) {
+        PropertyInternal.prototype.setValue = function (value) {
             var _this = this;
             // setValue always fires the first time, even without a change in value.
             if (this.current === value && this.hasFired) {
-                return;
+                return this.current;
             }
             this.hasFired = true;
             var previous = this.current;
             this.current = value;
             this.event.Fire(function (callback) { return callback(_this.current, previous); });
+            return this.current;
         };
-        Property.prototype.Event = function () {
+        PropertyInternal.prototype.Event = function () {
             return this.event;
         };
-        return Property;
+        return PropertyInternal;
     }());
-    exports.Property = Property;
+    var Property;
+    (function (Property) {
+        function create(current) {
+            var property = (function (value) {
+                return property.getSet(value);
+            });
+            property.getSet = PropertyInternal.prototype.getSet.bind(property);
+            property.setValue = PropertyInternal.prototype.setValue.bind(property);
+            property.Event = PropertyInternal.prototype.Event.bind(property);
+            property.event = new GameEvent();
+            property.current = current;
+            property.hasFired = false;
+            return property;
+        }
+        Property.create = create;
+    })(Property = exports.Property || (exports.Property = {}));
 });
 define("app", ["require", "exports", "gamedata", "views", "event"], function (require, exports, gamedata, views, event_1) {
     "use strict";
@@ -326,16 +328,16 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
     var ThingType = (function () {
         function ThingType(tt) {
             this.name = tt.name;
-            this.Display = new event_1.Property(tt.display);
-            this.Title = new event_1.Property(tt.title);
-            this.Cost = new event_1.Property(tt.cost);
-            this.Capacity = new event_1.Property(tt.capacity);
-            this.Income = new event_1.Property(tt.income);
-            this.CapacityEffect = new event_1.Property(tt.capacityEffect);
-            this.CostRatio = new event_1.Property(tt.costRatio);
-            this.ZeroAtCapacity = new event_1.Property(tt.zeroAtCapacity);
-            this.IncomeWhenZeroed = new event_1.Property(tt.incomeWhenZeroed);
-            this.ProgressThing = new event_1.Property(tt.progressThing);
+            this.Display = event_1.Property.create(tt.display);
+            this.Title = event_1.Property.create(tt.title);
+            this.Cost = event_1.Property.create(tt.cost);
+            this.Capacity = event_1.Property.create(tt.capacity);
+            this.Income = event_1.Property.create(tt.income);
+            this.CapacityEffect = event_1.Property.create(tt.capacityEffect);
+            this.CostRatio = event_1.Property.create(tt.costRatio);
+            this.ZeroAtCapacity = event_1.Property.create(tt.zeroAtCapacity);
+            this.IncomeWhenZeroed = event_1.Property.create(tt.incomeWhenZeroed);
+            this.ProgressThing = event_1.Property.create(tt.progressThing);
         }
         ThingType.prototype.GetName = function () {
             return this.name;
@@ -350,7 +352,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var _this = this;
             entities.forEach(function (entity) {
                 var thingName = entity.GetName();
-                if (game.Model(thingName).Revealed.Get()) {
+                if (game.Model(thingName).Revealed()) {
                     _this.viewModels[thingName] = new ThingViewModel(entity);
                 }
                 game.Model(thingName).Revealed.Event().Register(function (revealed) {
@@ -380,14 +382,14 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.thingName = this.thingType.GetName();
             this.model = game.Model(this.thingName);
             // fill in initial values
-            this.DisplayText = new event_1.Property(this.thingType.Display.Get());
-            this.Progress = new event_1.Property(this.calculateProgress());
-            this.Count = new event_1.Property(this.model.Count.Get());
-            this.CapacityShown = new event_1.Property(this.model.CapacityRevealed.Get());
-            this.Capacity = new event_1.Property(this.model.Capacity.Get());
-            this.ButtonText = new event_1.Property(this.calculateButtonText());
-            this.ButtonEnabled = new event_1.Property(this.model.Purchasable.Get());
-            this.ButtonTitle = new event_1.Property(this.thingType.Title.Get());
+            this.DisplayText = event_1.Property.create(this.thingType.Display());
+            this.Progress = event_1.Property.create(this.calculateProgress());
+            this.Count = event_1.Property.create(this.model.Count());
+            this.CapacityShown = event_1.Property.create(this.model.CapacityRevealed());
+            this.Capacity = event_1.Property.create(this.model.Capacity());
+            this.ButtonText = event_1.Property.create(this.calculateButtonText());
+            this.ButtonEnabled = event_1.Property.create(this.model.Purchasable());
+            this.ButtonTitle = event_1.Property.create(this.thingType.Title());
             this.setupEvents();
         }
         ThingViewModel.prototype.setupProgressEvent = function () {
@@ -398,11 +400,11 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 this.progressUnreg = null;
             }
             // register new one if need
-            var progressThing = this.thingType.ProgressThing.Get();
+            var progressThing = this.thingType.ProgressThing();
             if (progressThing) {
                 var progresModel = game.Model(progressThing);
-                this.progressUnreg = progresModel.Count.Event().Register(function () { return _this.Progress.Set(_this.calculateProgress()); });
-                this.Progress.Set(this.calculateProgress());
+                this.progressUnreg = progresModel.Count.Event().Register(function () { return _this.Progress(_this.calculateProgress()); });
+                this.Progress(this.calculateProgress());
             }
         };
         ThingViewModel.prototype.setupButtonTextEvents = function () {
@@ -413,7 +415,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             }
             var u = function (callback) { return _this.costUnregs.push(callback); };
             // change of name to anything in the cost of the entity
-            var cost = this.thingType.Cost.Get();
+            var cost = this.thingType.Cost();
             if (cost) {
                 Object.keys(cost).forEach(function (costName) {
                     u(entityByName[costName].Display.Event().Register(function () { return _this.calculateButtonText(); }));
@@ -426,41 +428,41 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var u = function (callback) { return _this.unregs.push(callback); };
             // set up events so properties update correctly
             u(this.thingType.Display.Event().Register(function (newName) {
-                _this.DisplayText.Set(newName);
-                _this.ButtonText.Set(_this.calculateButtonText());
+                _this.DisplayText(newName);
+                _this.ButtonText(_this.calculateButtonText());
             }));
             this.setupProgressEvent();
             u(this.model.Count.Event().Register(function () {
-                _this.Count.Set(function () { return _this.model.Count.Get(); });
+                _this.Count(function () { return _this.model.Count(); });
             }));
             u(this.model.Price.Event().Register(function () {
-                _this.ButtonText.Set(_this.calculateButtonText());
+                _this.ButtonText(_this.calculateButtonText());
             }));
-            u(this.model.CapacityRevealed.Event().Register(function (reveal) { return _this.CapacityShown.Set(reveal); }));
-            u(this.model.Capacity.Event().Register(function (newCapacity) { return _this.Capacity.Set(newCapacity); }));
-            u(this.model.Purchasable.Event().Register(function (enabled) { return _this.ButtonEnabled.Set(enabled); }));
-            u(this.thingType.Title.Event().Register(function (newTitle) { return _this.ButtonTitle.Set(newTitle); }));
+            u(this.model.CapacityRevealed.Event().Register(function (reveal) { return _this.CapacityShown(reveal); }));
+            u(this.model.Capacity.Event().Register(function (newCapacity) { return _this.Capacity(newCapacity); }));
+            u(this.model.Purchasable.Event().Register(function (enabled) { return _this.ButtonEnabled(enabled); }));
+            u(this.thingType.Title.Event().Register(function (newTitle) { return _this.ButtonTitle(newTitle); }));
         };
         ThingViewModel.prototype.calculateProgress = function () {
-            var progressThing = this.thingType.ProgressThing.Get();
+            var progressThing = this.thingType.ProgressThing();
             if (!progressThing) {
                 return 0;
             }
-            if (this.model.Count.Get() === this.model.Capacity.Get()) {
+            if (this.model.Count() === this.model.Capacity()) {
                 return 0;
             }
             var progressModel = game.Model(progressThing);
-            return progressModel.Count.Get() / progressModel.Capacity.Get();
+            return progressModel.Count() / progressModel.Capacity();
         };
         ThingViewModel.prototype.calculateButtonText = function () {
-            var price = this.model.Price.Get();
+            var price = this.model.Price();
             var costString = Object.keys(price).map(function (thingName) {
-                return price[thingName] + ' ' + entityByName[thingName].Display.Get();
+                return price[thingName] + ' ' + entityByName[thingName].Display();
             }).join(', ');
             if (!costString) {
                 costString = "FREE!";
             }
-            return 'Buy a ' + this.thingType.Display.Get() + ' for ' + costString;
+            return 'Buy a ' + this.thingType.Display() + ' for ' + costString;
         };
         return ThingViewModel;
     }());
@@ -518,59 +520,59 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 new CostComponent(this, this.gameState),
                 new CapacityComponent(this, this.gameState),
             ];
-            this.Revealed.Set(this.shouldReveal());
+            this.Revealed(this.shouldReveal());
         };
         ThingModel.prototype.Reset = function () {
             this.everRevealed = false;
-            this.Revealed.Set(false);
-            this.Count.Set(0);
-            this.CapacityRevealed.Set(false);
+            this.Revealed(false);
+            this.Count(0);
+            this.CapacityRevealed(false);
         };
         // Purchase one of this type
         ThingModel.prototype.Buy = function () {
-            var price = this.Price.Get();
-            if (!this.Purchasable.Get()) {
+            var price = this.Price();
+            if (!this.Purchasable()) {
                 return;
             }
             Object.keys(price).forEach(function (thingName) {
                 var count = game.Model(thingName).Count;
-                var current = count.Get();
-                count.Set(current - price[thingName]);
+                var current = count();
+                count(current - price[thingName]);
             });
-            this.Count.Set(this.Count.Get() + 1);
+            this.Count(this.Count() + 1);
         };
         ThingModel.prototype.createProperties = function (saveData) {
             var _this = this;
             // values from the game save
             this.everRevealed = saveData.IsRevealed;
-            this.Revealed = new event_1.Property(saveData.IsRevealed);
+            this.Revealed = event_1.Property.create(saveData.IsRevealed);
             this.Revealed.Event().Register(function (reveal) { return _this.everRevealed = _this.everRevealed || reveal; });
-            this.CapacityRevealed = new event_1.Property(saveData.IsCapShown);
-            this.Count = new event_1.Property(saveData.Count);
+            this.CapacityRevealed = event_1.Property.create(saveData.IsCapShown);
+            this.Count = event_1.Property.create(saveData.Count);
             // derivative values
-            this.CanAfford = new event_1.Property(true);
-            this.AtCapacity = new event_1.Property(false);
-            this.Capacity = new event_1.Property(-1);
-            this.Price = new event_1.Property({});
+            this.CanAfford = event_1.Property.create(true);
+            this.AtCapacity = event_1.Property.create(false);
+            this.Capacity = event_1.Property.create(-1);
+            this.Price = event_1.Property.create({});
             // calculated properties
-            this.Purchasable = new event_1.Property(false);
-            var updatePurchasable = function () { return _this.Purchasable.Set(_this.CanAfford.Get() && !_this.AtCapacity.Get()); };
+            this.Purchasable = event_1.Property.create(false);
+            var updatePurchasable = function () { return _this.Purchasable(_this.CanAfford() && !_this.AtCapacity()); };
             this.CanAfford.Event().Register(updatePurchasable);
             this.AtCapacity.Event().Register(updatePurchasable);
-            var updateRevealed = function () { return _this.Revealed.Set(_this.shouldReveal()); };
+            var updateRevealed = function () { return _this.Revealed(_this.shouldReveal()); };
             // show if we have any, or can buy any
             this.Count.Event().Register(updateRevealed);
             this.Purchasable.Event().Register(updateRevealed);
         };
         ThingModel.prototype.shouldReveal = function () {
             // don't show things without display names
-            if (!entityByName[this.thingName].Display.Get()) {
+            if (!entityByName[this.thingName].Display()) {
                 return false;
             }
             if (this.everRevealed) {
                 return true;
             }
-            return this.Count.Get() > 0 || this.Purchasable.Get();
+            return this.Count() > 0 || this.Purchasable();
         };
         ThingModel.prototype.saveEvents = function () {
             var _this = this;
@@ -618,7 +620,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var _this = this;
             var unregs = [];
             var u = function (unreg) { return unregs.push(unreg); };
-            var cost = this.type.Cost.Get();
+            var cost = this.type.Cost();
             if (cost) {
                 Object.keys(cost).forEach(function (affected) {
                     return u(_this.gameState.Model(affected).Count.Event()
@@ -630,36 +632,36 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.refreshCleanup = function () { return unregs.forEach(function (unreg) { return unreg(); }); };
         };
         CostComponent.prototype.updateCost = function () {
-            var cost = this.type.Cost.Get();
+            var cost = this.type.Cost();
             if (!cost) {
                 return {};
             }
-            var ratio = this.type.CostRatio.Get();
+            var ratio = this.type.CostRatio();
             if (ratio === 0) {
-                this.model.Price.Set(cost);
+                this.model.Price(cost);
                 return;
             }
             if (!ratio) {
                 ratio = 1.15;
             }
             var currentPrice = {};
-            var count = this.model.Count.Get();
+            var count = this.model.Count();
             var multiplier = Math.pow(ratio, count);
             Object.keys(cost).forEach(function (thingName) {
                 currentPrice[thingName] = Math.floor(cost[thingName] * multiplier);
             });
-            this.model.Price.Set(currentPrice);
+            this.model.Price(currentPrice);
             this.updateAffordability();
         };
         CostComponent.prototype.updateAffordability = function () {
-            var price = this.model.Price.Get();
+            var price = this.model.Price();
             var canAfford = true;
             if (price) {
                 canAfford = Object.keys(price).every(function (thingName) {
-                    return game.Model(thingName).Count.Get() >= price[thingName];
+                    return game.Model(thingName).Count() >= price[thingName];
                 });
             }
-            this.model.CanAfford.Set(canAfford);
+            this.model.CanAfford(canAfford);
         };
         return CostComponent;
     }(Component));
@@ -689,7 +691,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var _this = this;
             var effectTable = {};
             this.gameState.GetEntities().forEach(function (entity) {
-                var effects = entity.CapacityEffect.Get();
+                var effects = entity.CapacityEffect();
                 if (!effects) {
                     return;
                 }
@@ -698,12 +700,12 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                     effectTable[entity.GetName()] = effect;
                 }
             });
-            var initial = this.type.Capacity.Get();
+            var initial = this.type.Capacity();
             var affecting = Object.keys(effectTable);
             this.calculateCapacity = function () { return affecting.reduce(function (sum, affecting) { return sum
-                + _this.gameState.Model(affecting).Count.Get()
+                + _this.gameState.Model(affecting).Count()
                     * effectTable[affecting]; }, initial); };
-            this.calculateCapacityRevealed = function () { return _this.model.Count.Get() > _this.model.Capacity.Get(); };
+            this.calculateCapacityRevealed = function () { return _this.model.Count() > _this.model.Capacity(); };
             var unregs = [];
             var u = function (unreg) { return unregs.push(unreg); };
             affecting.forEach(function (affected) {
@@ -716,55 +718,55 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         };
         CapacityComponent.prototype.updateCapacity = function () {
             var capacity = this.calculateCapacity();
-            this.model.Capacity.Set(capacity);
+            this.model.Capacity(capacity);
             this.updateCapacityRevealed();
         };
         // called when the count of our owner changes
         CapacityComponent.prototype.onCountChange = function (current, previous) {
-            var capacity = this.model.Capacity.Get();
+            var capacity = this.model.Capacity();
             if (capacity === -1) {
                 return;
             }
             // check if we're over capacity
             var countProp = this.model.Count;
-            var count = countProp.Get();
+            var count = countProp();
             if (count >= capacity) {
                 // check if we're a special zero-at-capacity type
-                if (this.type.ZeroAtCapacity.Get()) {
+                if (this.type.ZeroAtCapacity()) {
                     var timesOver = Math.floor(count / capacity);
-                    countProp.Set(current - timesOver * capacity);
-                    var income = this.type.IncomeWhenZeroed.Get();
+                    countProp(current - timesOver * capacity);
+                    var income = this.type.IncomeWhenZeroed();
                     if (income) {
                         Object.keys(income).forEach(function (earnedThing) {
                             var earnedCount = game.Model(earnedThing).Count;
-                            earnedCount.Set(earnedCount.Get() + income[earnedThing] * timesOver);
+                            earnedCount(earnedCount() + income[earnedThing] * timesOver);
                         });
                     }
                 }
                 else {
-                    countProp.Set(capacity);
+                    countProp(capacity);
                 }
             }
             this.updateCapacityRevealed();
         };
         CapacityComponent.prototype.updateCapacityRevealed = function () {
-            var capacity = this.model.Capacity.Get();
+            var capacity = this.model.Capacity();
             if (capacity === -1) {
-                this.model.AtCapacity.Set(false);
-                this.model.CapacityRevealed.Set(false);
+                this.model.AtCapacity(false);
+                this.model.CapacityRevealed(false);
                 return;
             }
-            var atCapacity = this.model.Count.Get() >= capacity;
-            this.model.AtCapacity.Set(atCapacity);
+            var atCapacity = this.model.Count() >= capacity;
+            this.model.AtCapacity(atCapacity);
             if (atCapacity) {
-                this.model.CapacityRevealed.Set(true);
+                this.model.CapacityRevealed(true);
             }
         };
         return CapacityComponent;
     }(Component));
     function createElementsForEntity(thingName) {
         var model = game.Model(thingName);
-        if (model.Revealed.Get()) {
+        if (model.Revealed()) {
             createThingRow(thingName);
         }
         var create = function (reveal, previous) {
@@ -840,12 +842,12 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         Object.keys(entityByName).forEach(function (thingName) {
             var model = game.Model(thingName);
             var type = model.Type;
-            var income = type.Income.Get();
-            var count = game.Model(thingName).Count.Get();
+            var income = type.Income();
+            var count = game.Model(thingName).Count();
             if (income && count) {
                 Object.keys(income).forEach(function (earnedName) {
                     var countProp = game.Model(earnedName).Count;
-                    countProp.Set(countProp.Get() + income[earnedName] * count);
+                    countProp(countProp() + income[earnedName] * count);
                 });
             }
         });
@@ -866,7 +868,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         game.addEntities(entities, saveData);
         thingViewModels.AddEntities(entities);
         entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });
-        Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].Display.Get()] = entityByName[thingName]; });
+        Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].Display()] = entityByName[thingName]; });
     }
     // i think i need something that will fire when the page finished loading
     window.onload = onLoad;

@@ -27,35 +27,33 @@ export class GameEvent<T> implements IGameEvent<T> {
     }
 }
 
-export class Property<T> {
+export interface Property<T> {
+    (value?: T | { (): T }): T;
+    Event(): GameEvent<Property.Change<T>>;
+}
+
+type PropertyType<T> = {
+    current: T;
+    event: GameEvent<Property.Change<T>>;
+    hasFired: boolean;
+    (value?: T | { (): T }): T;
+    getSet: (value?: T | { (): T }) => T;
+    setValue: (value: T) => T;
+    Event: () => GameEvent<Property.Change<T>>;
+};
+
+// we use assign to merge this class and a callable object to get the interface
+// we want.
+class PropertyInternal<T> {
     private event: GameEvent<Property.Change<T>>;
     private hasFired: boolean = false;
+    private current: T;
 
-    constructor(private current: T) {
-        this.event = new GameEvent<Property.Change<T>>();
-    }
-
-    // public (value?: T | { (): T}): T {
-    //     // call with no argument to get, otherwise set
-    //     if (value === undefined) {
-    //         return this.current;
-    //     }
-    //     if (typeof value === "function") {
-    //         setTimeout(() => {
-    //             var val = (<{ (): T }>value)();
-    //             this.setValue(val);
-    //         });
-    //     }
-    //     else {
-    //         this.setValue(<T>value);
-    //     }
-    // }
-
-    public Get(): T {
-        return this.current;
-    }
-
-    public Set(value: T | { (): T }) {
+    public getSet (value?: T | { (): T}): T {
+        // call with no argument to get, otherwise set
+        if (value === undefined) {
+            return this.current;
+        }
         if (typeof value === "function") {
             setTimeout(() => {
                 var val = (<{ (): T }>value)();
@@ -67,10 +65,10 @@ export class Property<T> {
         }
     }
 
-    private setValue(value: T) {
+    public setValue(value: T) {
         // setValue always fires the first time, even without a change in value.
         if (this.current === value && this.hasFired) {
-            return;
+            return this.current;
         }
 
         this.hasFired = true;
@@ -78,6 +76,8 @@ export class Property<T> {
         var previous = this.current;
         this.current = <T>value;
         this.event.Fire(callback => callback(this.current, previous));
+
+        return this.current;
     }
 
     public Event() {
@@ -88,5 +88,22 @@ export class Property<T> {
 export module Property {
     export interface Change<T> {
         (current: T, previous: T): void;
+    }
+
+    export function create<T>(current: T): Property<T> {
+        let property = <PropertyType<T>><any>(
+            function(value?: T | { (): T}): T {
+                return property.getSet(value);
+            }
+        );
+
+        property.getSet = PropertyInternal.prototype.getSet.bind(property);
+        property.setValue = PropertyInternal.prototype.setValue.bind(property);
+        property.Event = PropertyInternal.prototype.Event.bind(property);
+
+        property.event = new GameEvent<Property.Change<T>>();
+        property.current = current;
+        property.hasFired = false;
+        return <Property<T>>property;
     }
 }

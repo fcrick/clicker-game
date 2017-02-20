@@ -764,9 +764,9 @@ function createThingRow(thingName) {
     var entity = entityByName[thingName];
     var toUnload = [];
     m.mount(newDiv, {
-        controller: function () {
-            onunload: (function (e) { return toUnload.forEach(function (u) { return u(); }); });
-        },
+        controller: function () { return ({
+            onunload: function (e) { return toUnload.forEach(function (u) { return u(); }); }
+        }); },
         view: function () { return thingRow.view(thingViewModels.GetViewModel(entity)); }
     });
     var redraw = function () { return m.redraw(); };

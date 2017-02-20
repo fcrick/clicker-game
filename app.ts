@@ -390,7 +390,7 @@ class ThingModel {
         this.everRevealed = saveData.IsRevealed;
         this.Revealed = new Property(saveData.IsRevealed);
         this.Revealed.Event().Register(reveal => this.everRevealed = this.everRevealed || reveal);
-        
+
         this.CapacityRevealed = new Property(saveData.IsCapShown);
         this.Count = new Property(saveData.Count);
 
@@ -409,27 +409,27 @@ class ThingModel {
 
         this.CanAfford.Event().Register(updatePurchasable);
         this.AtCapacity.Event().Register(updatePurchasable);
-        
+
         var updateRevealed = () => this.Revealed.Set(this.shouldReveal());
 
         // show if we have any, or can buy any
         this.Count.Event().Register(updateRevealed);
         this.Purchasable.Event().Register(updateRevealed);
     }
-    
+
     shouldReveal() {
         // don't show things without display names
         if (!entityByName[this.thingName].Display.Get()) {
             return false;
         }
-            
+
         if (this.everRevealed) {
             return true;
         }
-            
-        return this.Count.Get() > 0 || this.Purchasable.Get(); 
+
+        return this.Count.Get() > 0 || this.Purchasable.Get();
     }
-    
+
     saveEvents() {
         this.CapacityRevealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsCapShown = reveal);
         this.Revealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsRevealed = reveal);
@@ -690,9 +690,9 @@ function createThingRow(thingName: string) {
     var toUnload: { (): void; }[] = [];
 
     m.mount(newDiv, {
-        controller: () => {
-            onunload: (e: { (): void; }) => toUnload.forEach(u => u());
-        },
+        controller: () => ({
+            onunload: (e: { (): void; }) => toUnload.forEach(u => u())
+        }),
         view: () => thingRow.view(thingViewModels.GetViewModel(entity))
     });
 

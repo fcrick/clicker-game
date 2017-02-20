@@ -1,8 +1,6 @@
-﻿/// <reference path="mithril.d.ts"/>
-/// <reference path="app.ts"/>
-/// <reference path="gamedata.ts"/>
+﻿import { ThingViewModel } from './app';
 
-var thingRow = {
+export var thingRow = {
     view: (vm: ThingViewModel) =>
         // row
         m('.row', <any>{ style: { display: 'flex', alignItems: 'center' } }, [
@@ -16,9 +14,9 @@ var thingRow = {
             ]),
             // count
             m('.col-sm-2', [
-                m('span', vm.Count.Get()),
-                vm.CapacityShown.Get() ? m('span', ' / ') : '',
-                vm.CapacityShown.Get() ? m('span', vm.Capacity.Get()) : '',
+                m(<any>'span', vm.Count.Get()),
+                vm.CapacityShown.Get() ? m(<any>'span', ' / ') : '',
+                vm.CapacityShown.Get() ? m(<any>'span', vm.Capacity.Get()) : '',
             ]),
             // button
             m('.col-sm-2', [

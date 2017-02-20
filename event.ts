@@ -1,12 +1,9 @@
-﻿/// <reference path="mithril.d.ts"/>
-/// <reference path="app.ts"/>
-/// <reference path="gamedata.ts"/>
-
-interface IGameEvent<T> {
+﻿
+export interface IGameEvent<T> {
     Register: (callback: T) => () => void;
 }
 
-class GameEvent<T> implements IGameEvent<T> {
+export class GameEvent<T> implements IGameEvent<T> {
     callbacks: T[] = [];
 
     public Register(callback: T): () => void {
@@ -30,13 +27,29 @@ class GameEvent<T> implements IGameEvent<T> {
     }
 }
 
-class Property<T> {
+export class Property<T> {
     private event: GameEvent<Property.Change<T>>;
     private hasFired: boolean = false;
 
     constructor(private current: T) {
         this.event = new GameEvent<Property.Change<T>>();
     }
+
+    // public (value?: T | { (): T}): T {
+    //     // call with no argument to get, otherwise set
+    //     if (value === undefined) {
+    //         return this.current;
+    //     }
+    //     if (typeof value === "function") {
+    //         setTimeout(() => {
+    //             var val = (<{ (): T }>value)();
+    //             this.setValue(val);
+    //         });
+    //     }
+    //     else {
+    //         this.setValue(<T>value);
+    //     }
+    // }
 
     public Get(): T {
         return this.current;
@@ -55,6 +68,7 @@ class Property<T> {
     }
 
     private setValue(value: T) {
+        // setValue always fires the first time, even without a change in value.
         if (this.current === value && this.hasFired) {
             return;
         }
@@ -71,7 +85,7 @@ class Property<T> {
     }
 }
 
-module Property {
+export module Property {
     export interface Change<T> {
         (current: T, previous: T): void;
     }

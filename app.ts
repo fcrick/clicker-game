@@ -1,7 +1,9 @@
-﻿/// <reference path="mithril.d.ts"/>
-/// <reference path="event.ts"/>
-/// <reference path="gamedata.ts"/>
-/// <reference path="views.ts"/>
+﻿import * as gamedata from './gamedata';
+import * as views from './views';
+import {GameEvent, IGameEvent, Property} from './event';
+
+let definitions = gamedata.definitions;
+let thingRow = views.thingRow;
 
 var resetButton = document.getElementById("resetButton");
 var myText = document.getElementById("helloText");
@@ -48,7 +50,7 @@ interface NumberMap {
     [thingName: string]: number;
 };
 
-interface ThingTypeData {
+export interface ThingTypeData {
     name: string;
     display?: string; // things without display are never shown
     title?: string; // tooltip display
@@ -125,7 +127,7 @@ class ThingViewModelCollection {
     }
 }
 
-class ThingViewModel {
+export class ThingViewModel {
     public DisplayText: Property<string>;
     public Progress: Property<number>;
 
@@ -689,7 +691,7 @@ function createThingRow(thingName: string) {
 
     var toUnload: { (): void; }[] = [];
 
-    m.mount(newDiv, {
+    (<any>m).mount(newDiv, {
         controller: () => ({
             onunload: (e: { (): void; }) => toUnload.forEach(u => u())
         }),

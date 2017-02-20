@@ -1,3 +1,8 @@
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
 /// <reference path="app.ts"/>
 var definitions = [
     {
@@ -216,7 +221,7 @@ var GameEvent = (function () {
         this.callbacks.forEach(function (callback) { return caller(callback); });
     };
     return GameEvent;
-})();
+}());
 var Property = (function () {
     function Property(current) {
         this.current = current;
@@ -252,7 +257,7 @@ var Property = (function () {
         return this.event;
     };
     return Property;
-})();
+}());
 /// <reference path="mithril.d.ts"/>
 /// <reference path="app.ts"/>
 /// <reference path="gamedata.ts"/>
@@ -292,11 +297,6 @@ var thingRow = {
 /// <reference path="event.ts"/>
 /// <reference path="gamedata.ts"/>
 /// <reference path="views.ts"/>
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
 var resetButton = document.getElementById("resetButton");
 var myText = document.getElementById("helloText");
 resetButton.addEventListener('click', resetEverything, false);
@@ -321,7 +321,7 @@ var ThingType = (function () {
         return this.name;
     };
     return ThingType;
-})();
+}());
 var ThingViewModelCollection = (function () {
     function ThingViewModelCollection() {
         this.viewModels = {};
@@ -349,7 +349,7 @@ var ThingViewModelCollection = (function () {
         return this.viewModels[entity.GetName()];
     };
     return ThingViewModelCollection;
-})();
+}());
 var ThingViewModel = (function () {
     function ThingViewModel(thingType) {
         var _this = this;
@@ -443,7 +443,7 @@ var ThingViewModel = (function () {
         return 'Buy a ' + this.thingType.Display.Get() + ' for ' + costString;
     };
     return ThingViewModel;
-})();
+}());
 var GameState = (function () {
     function GameState() {
         this.entities = [];
@@ -482,7 +482,7 @@ var GameState = (function () {
         this.gameEvent.Fire(function (callback) { return callback(); });
     };
     return GameState;
-})();
+}());
 var ThingModel = (function () {
     function ThingModel(Type, saveData, gameState) {
         this.Type = Type;
@@ -558,7 +558,7 @@ var ThingModel = (function () {
         this.Count.Event().Register(function (count) { return saveData.Stuff[_this.thingName].Count = count; });
     };
     return ThingModel;
-})();
+}());
 var Component = (function () {
     function Component(model, gameState) {
         this.model = model;
@@ -567,26 +567,26 @@ var Component = (function () {
     }
     Component.prototype.Dispose = function () { };
     return Component;
-})();
+}());
 var CostComponent = (function (_super) {
     __extends(CostComponent, _super);
     function CostComponent(model, gameState) {
-        var _this = this;
-        _super.call(this, model, gameState);
-        this.model = model;
-        this.gameState = gameState;
-        this.refreshCleanup = function () { };
-        this.refresh();
-        this.updateCost();
-        var unreg = this.model.Count.Event().Register(function () { return _this.updateCost(); });
+        var _this = _super.call(this, model, gameState) || this;
+        _this.model = model;
+        _this.gameState = gameState;
+        _this.refreshCleanup = function () { };
+        _this.refresh();
+        _this.updateCost();
+        var unreg = _this.model.Count.Event().Register(function () { return _this.updateCost(); });
         var unreg2 = gameState.GetEvent().Register(function () {
             _this.refresh();
             _this.updateCost();
         });
-        this.cleanupComponent = function () {
+        _this.cleanupComponent = function () {
             unreg();
             unreg2();
         };
+        return _this;
     }
     // call this when you're getting rid of this component
     CostComponent.prototype.Dispose = function () {
@@ -641,23 +641,23 @@ var CostComponent = (function (_super) {
         this.model.CanAfford.Set(canAfford);
     };
     return CostComponent;
-})(Component);
+}(Component));
 var CapacityComponent = (function (_super) {
     __extends(CapacityComponent, _super);
     function CapacityComponent(model, gameState) {
-        var _this = this;
-        _super.call(this, model, gameState);
-        this.model = model;
-        this.gameState = gameState;
-        this.refreshCleanup = function () { };
-        this.refresh();
-        this.updateCapacity();
-        var unreg = this.model.Count.Event().Register(function (curr, prev) { return _this.onCountChange(curr, prev); });
+        var _this = _super.call(this, model, gameState) || this;
+        _this.model = model;
+        _this.gameState = gameState;
+        _this.refreshCleanup = function () { };
+        _this.refresh();
+        _this.updateCapacity();
+        var unreg = _this.model.Count.Event().Register(function (curr, prev) { return _this.onCountChange(curr, prev); });
         var unreg2 = gameState.GetEvent().Register(function () { return _this.refresh(); });
-        this.cleanupComponent = function () {
+        _this.cleanupComponent = function () {
             unreg();
             unreg2();
         };
+        return _this;
     }
     // call this when you're getting rid of this component
     CapacityComponent.prototype.Dispose = function () {
@@ -740,7 +740,7 @@ var CapacityComponent = (function (_super) {
         }
     };
     return CapacityComponent;
-})(Component);
+}(Component));
 function createElementsForEntity(thingName) {
     var model = game.Model(thingName);
     if (model.Revealed.Get()) {

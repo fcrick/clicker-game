@@ -1,12 +1,12 @@
 ﻿
 type Change<T> = {(current?: T, previous?: T): void};
 
-export type GameEvent<T> = {
+export type Event<T> = {
     register(callback: Change<T>): () => boolean;
     fire(caller: (callback: Change<T>) => void): void;
 };
 
-export function event<T>(): GameEvent<T> {
+export function Event   <T>(): Event<T> {
     let callbacks: Change<T>[] = [];
     let unregister = (callback: Change<T>) => {
         var index = callbacks.indexOf(callback);
@@ -35,9 +35,9 @@ export type Property<T> = {
     register(callback: Change<T>): () => boolean;
 };
 
-export function property<T>(initial: T): Property<T> {
+export function Property<T>(initial: T): Property<T> {
     // hide our internal state away in a closure
-    let { register, fire } = event<T>();
+    let { register, fire } = Event<T>();
     let hasFired = false;
     let current: T = initial;
 

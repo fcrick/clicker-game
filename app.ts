@@ -1,6 +1,6 @@
 ﻿import * as gamedata from './gamedata';
 import * as views from './views';
-import {GameEvent, IGameEvent, Property} from './event';
+import { GameEvent, Property} from './event';
 
 let definitions = gamedata.definitions;
 let thingRow = views.thingRow;
@@ -108,7 +108,7 @@ class ThingViewModelCollection {
                 this.viewModels[thingName] = new ThingViewModel(entity);
             }
 
-            game.Model(thingName).Revealed.Event().Register((revealed: boolean) => {
+            game.Model(thingName).Revealed.register(revealed => {
                 if (!revealed || this.viewModels[thingName]) {
                     return;
                 }
@@ -171,7 +171,7 @@ export class ThingViewModel {
         var progressThing = this.thingType.ProgressThing();
         if (progressThing) {
             var progresModel = game.Model(progressThing);
-            this.progressUnreg = progresModel.Count.Event().Register(() => this.Progress(this.calculateProgress()));
+            this.progressUnreg = progresModel.Count.register(() => this.Progress(this.calculateProgress()));
             this.Progress(this.calculateProgress());
         }
     }
@@ -188,37 +188,37 @@ export class ThingViewModel {
         var cost = this.thingType.Cost();
         if (cost) {
             Object.keys(cost).forEach(costName => {
-                u(entityByName[costName].Display.Event().Register(() => this.calculateButtonText()));
+                u(entityByName[costName].Display.register(() => this.calculateButtonText()));
             });
         }
 
-        u(this.thingType.Cost.Event().Register(() => this.setupButtonTextEvents()));
+        u(this.thingType.Cost.register(() => this.setupButtonTextEvents()));
     }
 
     setupEvents() {
         var u = (callback: () => void) => this.unregs.push(callback);
 
         // set up events so properties update correctly
-        u(this.thingType.Display.Event().Register(newName => {
+        u(this.thingType.Display.register(newName => {
             this.DisplayText(newName);
             this.ButtonText(this.calculateButtonText());
         }));
 
         this.setupProgressEvent();
 
-        u(this.model.Count.Event().Register(() => {
+        u(this.model.Count.register(() => {
             this.Count(() => this.model.Count());
         }));
 
-        u(this.model.Price.Event().Register(() => {
+        u(this.model.Price.register(() => {
             this.ButtonText(this.calculateButtonText());
         }));
 
-        u(this.model.CapacityRevealed.Event().Register(reveal => this.CapacityShown(reveal)));
-        u(this.model.Capacity.Event().Register(newCapacity => this.Capacity(newCapacity)));
+        u(this.model.CapacityRevealed.register(reveal => this.CapacityShown(reveal)));
+        u(this.model.Capacity.register(newCapacity => this.Capacity(newCapacity)));
 
-        u(this.model.Purchasable.Event().Register(enabled => this.ButtonEnabled(enabled)));
-        u(this.thingType.Title.Event().Register(newTitle => this.ButtonTitle(newTitle)));
+        u(this.model.Purchasable.register(enabled => this.ButtonEnabled(enabled)));
+        u(this.thingType.Title.register(newTitle => this.ButtonTitle(newTitle)));
     }
 
     calculateProgress(): number {
@@ -265,7 +265,7 @@ class GameState {
         this.models = [];
         this.modelLookup = {};
 
-        this.gameEvent = new GameEvent<{ (): void}>();
+        this.gameEvent = GameEvent.create<() => void>();
     }
 
     public GetEntities() { return this.entities; }
@@ -275,7 +275,7 @@ class GameState {
     public GetThingModels() { return this.models; }
     public Model(thingName: string) { return this.modelLookup[thingName]; }
 
-    public GetEvent(): IGameEvent<{ (): void }> {
+    public GetEvent() {
         return this.gameEvent;
     }
 
@@ -303,7 +303,7 @@ class GameState {
 
         initialize();
 
-        this.gameEvent.Fire(callback => callback());
+        this.gameEvent.fire(callback => callback());
     }
 
     private entities: ThingType[];
@@ -391,7 +391,7 @@ class ThingModel {
         // values from the game save
         this.everRevealed = saveData.IsRevealed;
         this.Revealed = Property.create(saveData.IsRevealed);
-        this.Revealed.Event().Register(reveal => this.everRevealed = this.everRevealed || reveal);
+        this.Revealed.register(reveal => this.everRevealed = this.everRevealed || reveal);
 
         this.CapacityRevealed = Property.create(saveData.IsCapShown);
         this.Count = Property.create(saveData.Count);
@@ -409,14 +409,14 @@ class ThingModel {
             this.CanAfford() && !this.AtCapacity()
         );
 
-        this.CanAfford.Event().Register(updatePurchasable);
-        this.AtCapacity.Event().Register(updatePurchasable);
+        this.CanAfford.register(updatePurchasable);
+        this.AtCapacity.register(updatePurchasable);
 
         var updateRevealed = () => this.Revealed(this.shouldReveal());
 
         // show if we have any, or can buy any
-        this.Count.Event().Register(updateRevealed);
-        this.Purchasable.Event().Register(updateRevealed);
+        this.Count.register(updateRevealed);
+        this.Purchasable.register(updateRevealed);
     }
 
     shouldReveal() {
@@ -433,9 +433,9 @@ class ThingModel {
     }
 
     saveEvents() {
-        this.CapacityRevealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsCapShown = reveal);
-        this.Revealed.Event().Register(reveal => saveData.Stuff[this.thingName].IsRevealed = reveal);
-        this.Count.Event().Register(count => saveData.Stuff[this.thingName].Count = count);
+        this.CapacityRevealed.register(reveal => saveData.Stuff[this.thingName].IsCapShown = reveal);
+        this.Revealed.register(reveal => saveData.Stuff[this.thingName].IsRevealed = reveal);
+        this.Count.register(count => saveData.Stuff[this.thingName].Count = count);
     }
 
     private thingName: string;
@@ -459,8 +459,8 @@ class CostComponent extends Component {
         this.refresh();
         this.updateCost();
 
-        var unreg = this.model.Count.Event().Register(() => this.updateCost());
-        var unreg2 = gameState.GetEvent().Register(() => {
+        var unreg = this.model.Count.register(() => this.updateCost());
+        var unreg2 = gameState.GetEvent().register(() => {
             this.refresh();
             this.updateCost();
         });
@@ -484,8 +484,8 @@ class CostComponent extends Component {
         var cost = this.type.Cost();
         if (cost) {
             Object.keys(cost).forEach(affected =>
-                u(this.gameState.Model(affected).Count.Event()
-                    .Register(() => this.updateAffordability())));
+                u(this.gameState.Model(affected).Count
+                .register(() => this.updateAffordability())));
         }
 
         // remove old callbacks
@@ -547,8 +547,8 @@ class CapacityComponent extends Component {
         this.refresh();
         this.updateCapacity();
 
-        var unreg = this.model.Count.Event().Register((curr, prev) => this.onCountChange(curr, prev));
-        var unreg2 = gameState.GetEvent().Register(() => this.refresh());
+        var unreg = this.model.Count.register((curr, prev) => this.onCountChange(curr, prev));
+        var unreg2 = gameState.GetEvent().register(() => this.refresh());
 
         this.cleanupComponent = () => {
             unreg();
@@ -593,8 +593,7 @@ class CapacityComponent extends Component {
         var u = (unreg: { (): void; }) => unregs.push(unreg);
 
         affecting.forEach(affected =>
-            u(this.gameState.Model(affected).Count.Event()
-                .Register(() => this.updateCapacity())));
+            u(this.gameState.Model(affected).Count.register(() => this.updateCapacity())));
 
         // remove old callbacks
         this.refreshCleanup();
@@ -673,7 +672,7 @@ function createElementsForEntity(thingName: string) {
         }
     }
 
-    model.Revealed.Event().Register(create);
+    model.Revealed.register(create);
 }
 
 function createThingRow(thingName: string) {
@@ -703,17 +702,17 @@ function createThingRow(thingName: string) {
 
     var vm = thingViewModels.GetViewModel(entity);
 
-    u(vm.ButtonEnabled.Event().Register(redraw));
-    u(vm.ButtonText.Event().Register(redraw));
-    u(vm.ButtonTitle.Event().Register(redraw));
-    u(vm.Capacity.Event().Register(redraw));
-    u(vm.CapacityShown.Event().Register(redraw));
-    u(vm.Count.Event().Register(redraw));
-    u(vm.DisplayText.Event().Register(redraw));
-    u(vm.Progress.Event().Register(redraw));
+    u(vm.ButtonEnabled.register(redraw));
+    u(vm.ButtonText.register(redraw));
+    u(vm.ButtonTitle.register(redraw));
+    u(vm.Capacity.register(redraw));
+    u(vm.CapacityShown.register(redraw));
+    u(vm.Count.register(redraw));
+    u(vm.DisplayText.register(redraw));
+    u(vm.Progress.register(redraw));
 
     var unregReveal: () => void;
-    unregReveal = game.Model(thingName).Revealed.Event().Register(revealed => {
+    unregReveal = game.Model(thingName).Revealed.register(revealed => {
         if (revealed) {
             return;
         }

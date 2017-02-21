@@ -1,109 +1,96 @@
 ﻿
-export interface IGameEvent<T> {
-    Register: (callback: T) => () => void;
-}
-
-export class GameEvent<T> implements IGameEvent<T> {
-    callbacks: T[] = [];
-
-    public Register(callback: T): () => void {
-        this.callbacks.push(callback);
-        return () => this.unregister(callback);
-    }
-
-    unregister(callback: T) {
-        var index = this.callbacks.indexOf(callback);
-
-        if (index === -1) {
-            return false;
-        }
-
-        this.callbacks.splice(index, 1);
-        return true;
-    }
-
-    public Fire(caller: (callback: T) => void) {
-        this.callbacks.forEach(callback => caller(callback));
-    }
-}
-
-export interface Property<T> {
-    (value?: T | { (): T }): T;
-    Event(): GameEvent<Property.Change<T>>;
-}
-
-type PropertyType<T> = {
-    current: T;
-    event: GameEvent<Property.Change<T>>;
-    hasFired: boolean;
-    (value?: T | { (): T }): T;
-    getSet: (value?: T | { (): T }) => T;
-    setValue: (value: T) => T;
-    Event: () => GameEvent<Property.Change<T>>;
+export type GameEvent<T> = {
+    register(callback: T): () => boolean;
+    fire(caller: (callback: T) => void): void;
 };
 
-// we use assign to merge this class and a callable object to get the interface
-// we want.
-class PropertyInternal<T> {
-    private event: GameEvent<Property.Change<T>>;
-    private hasFired: boolean = false;
-    private current: T;
+export type Property<T> = {
+    (value?: T | { (): T }): T;
+    register(callback: Property.Change<T>): () => void;
+};
 
-    public getSet (value?: T | { (): T}): T {
-        // call with no argument to get, otherwise set
-        if (value === undefined) {
-            return this.current;
-        }
-        if (typeof value === "function") {
-            setTimeout(() => {
-                var val = (<{ (): T }>value)();
-                this.setValue(val);
-            });
-        }
-        else {
-            this.setValue(<T>value);
-        }
-    }
-
-    public setValue(value: T) {
-        // setValue always fires the first time, even without a change in value.
-        if (this.current === value && this.hasFired) {
-            return this.current;
-        }
-
-        this.hasFired = true;
-
-        var previous = this.current;
-        this.current = <T>value;
-        this.event.Fire(callback => callback(this.current, previous));
-
-        return this.current;
-    }
-
-    public Event() {
-        return this.event;
-    }
-}
+type PropertyInternal<T> = {
+    current: T;
+    hasFired: boolean;
+    (value?: T | { (): T }): T;
+    setValue: (value: T) => T;
+    register: (callback: (current: T, previous: T) => void) => () => void;
+};
 
 export module Property {
-    export interface Change<T> {
+    export type Change<T> = {
         (current: T, previous: T): void;
-    }
+    };
 
+    // this hacks together a property starting with a function, then adding
+    // the other fields to it manually. Hopefully I'll figure out a less awful
+    // way to do this at some point.
     export function create<T>(current: T): Property<T> {
-        let property = <PropertyType<T>><any>(
+        let { register, fire } = GameEvent.create<Property.Change<T>>();
+        let property = <PropertyInternal<T>>(
             function(value?: T | { (): T}): T {
-                return property.getSet(value);
+                // call with no argument to get, otherwise set
+                if (value === undefined) {
+                    return property.current;
+                }
+                if (typeof value === "function") {
+                    setTimeout(() => {
+                        var val = (<() => T>value)();
+                        property.setValue(val);
+                    });
+                }
+                else {
+                    property.setValue(<T>value);
+                }
             }
         );
 
-        property.getSet = PropertyInternal.prototype.getSet.bind(property);
-        property.setValue = PropertyInternal.prototype.setValue.bind(property);
-        property.Event = PropertyInternal.prototype.Event.bind(property);
+        property.setValue = (value: T) => {
+            // setValue always fires the first time, even without a change in value.
+            if (property.current === value && property.hasFired) {
+                return this.current;
+            }
 
-        property.event = new GameEvent<Property.Change<T>>();
+            property.hasFired = true;
+
+            var previous = property.current;
+            property.current = value;
+            fire(callback => callback(property.current, previous));
+
+            return property.current;
+        };
+
+        property.register = register;
         property.current = current;
         property.hasFired = false;
-        return <Property<T>>property;
+        return property;
     }
 }
+
+export namespace GameEvent {
+    export function create<T>(): GameEvent<T> {
+        let callbacks: T[] = [];
+        let unregister = (callback: T) => {
+            var index = callbacks.indexOf(callback);
+
+            if (index === -1) {
+                return false;
+            }
+
+            callbacks.splice(index, 1);
+            return true;
+        };
+
+        return {
+            register: callback => {
+                callbacks.push(callback);
+                return () => unregister(callback);
+            },
+            fire: caller => {
+                callbacks.forEach(callback => caller(callback));
+            },
+        }
+    }
+}
+
+

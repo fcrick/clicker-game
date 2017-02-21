@@ -236,84 +236,71 @@ define("views", ["require", "exports"], function (require, exports) {
 });
 define("event", ["require", "exports"], function (require, exports) {
     "use strict";
-    var GameEvent = (function () {
-        function GameEvent() {
-            this.callbacks = [];
-        }
-        GameEvent.prototype.Register = function (callback) {
-            var _this = this;
-            this.callbacks.push(callback);
-            return function () { return _this.unregister(callback); };
-        };
-        GameEvent.prototype.unregister = function (callback) {
-            var index = this.callbacks.indexOf(callback);
-            if (index === -1) {
-                return false;
-            }
-            this.callbacks.splice(index, 1);
-            return true;
-        };
-        GameEvent.prototype.Fire = function (caller) {
-            this.callbacks.forEach(function (callback) { return caller(callback); });
-        };
-        return GameEvent;
-    }());
-    exports.GameEvent = GameEvent;
-    // we use assign to merge this class and a callable object to get the interface
-    // we want.
-    var PropertyInternal = (function () {
-        function PropertyInternal() {
-            this.hasFired = false;
-        }
-        PropertyInternal.prototype.getSet = function (value) {
-            var _this = this;
-            // call with no argument to get, otherwise set
-            if (value === undefined) {
-                return this.current;
-            }
-            if (typeof value === "function") {
-                setTimeout(function () {
-                    var val = value();
-                    _this.setValue(val);
-                });
-            }
-            else {
-                this.setValue(value);
-            }
-        };
-        PropertyInternal.prototype.setValue = function (value) {
-            var _this = this;
-            // setValue always fires the first time, even without a change in value.
-            if (this.current === value && this.hasFired) {
-                return this.current;
-            }
-            this.hasFired = true;
-            var previous = this.current;
-            this.current = value;
-            this.event.Fire(function (callback) { return callback(_this.current, previous); });
-            return this.current;
-        };
-        PropertyInternal.prototype.Event = function () {
-            return this.event;
-        };
-        return PropertyInternal;
-    }());
     var Property;
     (function (Property) {
+        // this hacks together a property starting with a function, then adding
+        // the other fields to it manually. Hopefully I'll figure out a less awful
+        // way to do this at some point.
         function create(current) {
+            var _this = this;
+            var _a = GameEvent.create(), register = _a.register, fire = _a.fire;
             var property = (function (value) {
-                return property.getSet(value);
+                // call with no argument to get, otherwise set
+                if (value === undefined) {
+                    return property.current;
+                }
+                if (typeof value === "function") {
+                    setTimeout(function () {
+                        var val = value();
+                        property.setValue(val);
+                    });
+                }
+                else {
+                    property.setValue(value);
+                }
             });
-            property.getSet = PropertyInternal.prototype.getSet.bind(property);
-            property.setValue = PropertyInternal.prototype.setValue.bind(property);
-            property.Event = PropertyInternal.prototype.Event.bind(property);
-            property.event = new GameEvent();
+            property.setValue = function (value) {
+                // setValue always fires the first time, even without a change in value.
+                if (property.current === value && property.hasFired) {
+                    return _this.current;
+                }
+                property.hasFired = true;
+                var previous = property.current;
+                property.current = value;
+                fire(function (callback) { return callback(property.current, previous); });
+                return property.current;
+            };
+            property.register = register;
             property.current = current;
             property.hasFired = false;
             return property;
         }
         Property.create = create;
     })(Property = exports.Property || (exports.Property = {}));
+    var GameEvent;
+    (function (GameEvent) {
+        function create() {
+            var callbacks = [];
+            var unregister = function (callback) {
+                var index = callbacks.indexOf(callback);
+                if (index === -1) {
+                    return false;
+                }
+                callbacks.splice(index, 1);
+                return true;
+            };
+            return {
+                register: function (callback) {
+                    callbacks.push(callback);
+                    return function () { return unregister(callback); };
+                },
+                fire: function (caller) {
+                    callbacks.forEach(function (callback) { return caller(callback); });
+                }
+            };
+        }
+        GameEvent.create = create;
+    })(GameEvent = exports.GameEvent || (exports.GameEvent = {}));
 });
 define("app", ["require", "exports", "gamedata", "views", "event"], function (require, exports, gamedata, views, event_1) {
     "use strict";
@@ -355,7 +342,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 if (game.Model(thingName).Revealed()) {
                     _this.viewModels[thingName] = new ThingViewModel(entity);
                 }
-                game.Model(thingName).Revealed.Event().Register(function (revealed) {
+                game.Model(thingName).Revealed.register(function (revealed) {
                     if (!revealed || _this.viewModels[thingName]) {
                         return;
                     }
@@ -403,7 +390,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var progressThing = this.thingType.ProgressThing();
             if (progressThing) {
                 var progresModel = game.Model(progressThing);
-                this.progressUnreg = progresModel.Count.Event().Register(function () { return _this.Progress(_this.calculateProgress()); });
+                this.progressUnreg = progresModel.Count.register(function () { return _this.Progress(_this.calculateProgress()); });
                 this.Progress(this.calculateProgress());
             }
         };
@@ -418,30 +405,30 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var cost = this.thingType.Cost();
             if (cost) {
                 Object.keys(cost).forEach(function (costName) {
-                    u(entityByName[costName].Display.Event().Register(function () { return _this.calculateButtonText(); }));
+                    u(entityByName[costName].Display.register(function () { return _this.calculateButtonText(); }));
                 });
             }
-            u(this.thingType.Cost.Event().Register(function () { return _this.setupButtonTextEvents(); }));
+            u(this.thingType.Cost.register(function () { return _this.setupButtonTextEvents(); }));
         };
         ThingViewModel.prototype.setupEvents = function () {
             var _this = this;
             var u = function (callback) { return _this.unregs.push(callback); };
             // set up events so properties update correctly
-            u(this.thingType.Display.Event().Register(function (newName) {
+            u(this.thingType.Display.register(function (newName) {
                 _this.DisplayText(newName);
                 _this.ButtonText(_this.calculateButtonText());
             }));
             this.setupProgressEvent();
-            u(this.model.Count.Event().Register(function () {
+            u(this.model.Count.register(function () {
                 _this.Count(function () { return _this.model.Count(); });
             }));
-            u(this.model.Price.Event().Register(function () {
+            u(this.model.Price.register(function () {
                 _this.ButtonText(_this.calculateButtonText());
             }));
-            u(this.model.CapacityRevealed.Event().Register(function (reveal) { return _this.CapacityShown(reveal); }));
-            u(this.model.Capacity.Event().Register(function (newCapacity) { return _this.Capacity(newCapacity); }));
-            u(this.model.Purchasable.Event().Register(function (enabled) { return _this.ButtonEnabled(enabled); }));
-            u(this.thingType.Title.Event().Register(function (newTitle) { return _this.ButtonTitle(newTitle); }));
+            u(this.model.CapacityRevealed.register(function (reveal) { return _this.CapacityShown(reveal); }));
+            u(this.model.Capacity.register(function (newCapacity) { return _this.Capacity(newCapacity); }));
+            u(this.model.Purchasable.register(function (enabled) { return _this.ButtonEnabled(enabled); }));
+            u(this.thingType.Title.register(function (newTitle) { return _this.ButtonTitle(newTitle); }));
         };
         ThingViewModel.prototype.calculateProgress = function () {
             var progressThing = this.thingType.ProgressThing();
@@ -474,7 +461,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.entityLookup = {};
             this.models = [];
             this.modelLookup = {};
-            this.gameEvent = new event_1.GameEvent();
+            this.gameEvent = event_1.GameEvent.create();
         }
         GameState.prototype.GetEntities = function () { return this.entities; };
         GameState.prototype.GetThingNames = function () { return this.thingNames; };
@@ -502,7 +489,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 };
             });
             initialize();
-            this.gameEvent.Fire(function (callback) { return callback(); });
+            this.gameEvent.fire(function (callback) { return callback(); });
         };
         return GameState;
     }());
@@ -546,7 +533,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             // values from the game save
             this.everRevealed = saveData.IsRevealed;
             this.Revealed = event_1.Property.create(saveData.IsRevealed);
-            this.Revealed.Event().Register(function (reveal) { return _this.everRevealed = _this.everRevealed || reveal; });
+            this.Revealed.register(function (reveal) { return _this.everRevealed = _this.everRevealed || reveal; });
             this.CapacityRevealed = event_1.Property.create(saveData.IsCapShown);
             this.Count = event_1.Property.create(saveData.Count);
             // derivative values
@@ -557,12 +544,12 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             // calculated properties
             this.Purchasable = event_1.Property.create(false);
             var updatePurchasable = function () { return _this.Purchasable(_this.CanAfford() && !_this.AtCapacity()); };
-            this.CanAfford.Event().Register(updatePurchasable);
-            this.AtCapacity.Event().Register(updatePurchasable);
+            this.CanAfford.register(updatePurchasable);
+            this.AtCapacity.register(updatePurchasable);
             var updateRevealed = function () { return _this.Revealed(_this.shouldReveal()); };
             // show if we have any, or can buy any
-            this.Count.Event().Register(updateRevealed);
-            this.Purchasable.Event().Register(updateRevealed);
+            this.Count.register(updateRevealed);
+            this.Purchasable.register(updateRevealed);
         };
         ThingModel.prototype.shouldReveal = function () {
             // don't show things without display names
@@ -576,9 +563,9 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         };
         ThingModel.prototype.saveEvents = function () {
             var _this = this;
-            this.CapacityRevealed.Event().Register(function (reveal) { return saveData.Stuff[_this.thingName].IsCapShown = reveal; });
-            this.Revealed.Event().Register(function (reveal) { return saveData.Stuff[_this.thingName].IsRevealed = reveal; });
-            this.Count.Event().Register(function (count) { return saveData.Stuff[_this.thingName].Count = count; });
+            this.CapacityRevealed.register(function (reveal) { return saveData.Stuff[_this.thingName].IsCapShown = reveal; });
+            this.Revealed.register(function (reveal) { return saveData.Stuff[_this.thingName].IsRevealed = reveal; });
+            this.Count.register(function (count) { return saveData.Stuff[_this.thingName].Count = count; });
         };
         return ThingModel;
     }());
@@ -600,8 +587,8 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             _this.refreshCleanup = function () { };
             _this.refresh();
             _this.updateCost();
-            var unreg = _this.model.Count.Event().Register(function () { return _this.updateCost(); });
-            var unreg2 = gameState.GetEvent().Register(function () {
+            var unreg = _this.model.Count.register(function () { return _this.updateCost(); });
+            var unreg2 = gameState.GetEvent().register(function () {
                 _this.refresh();
                 _this.updateCost();
             });
@@ -623,8 +610,8 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var cost = this.type.Cost();
             if (cost) {
                 Object.keys(cost).forEach(function (affected) {
-                    return u(_this.gameState.Model(affected).Count.Event()
-                        .Register(function () { return _this.updateAffordability(); }));
+                    return u(_this.gameState.Model(affected).Count
+                        .register(function () { return _this.updateAffordability(); }));
                 });
             }
             // remove old callbacks
@@ -674,8 +661,8 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             _this.refreshCleanup = function () { };
             _this.refresh();
             _this.updateCapacity();
-            var unreg = _this.model.Count.Event().Register(function (curr, prev) { return _this.onCountChange(curr, prev); });
-            var unreg2 = gameState.GetEvent().Register(function () { return _this.refresh(); });
+            var unreg = _this.model.Count.register(function (curr, prev) { return _this.onCountChange(curr, prev); });
+            var unreg2 = gameState.GetEvent().register(function () { return _this.refresh(); });
             _this.cleanupComponent = function () {
                 unreg();
                 unreg2();
@@ -709,8 +696,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var unregs = [];
             var u = function (unreg) { return unregs.push(unreg); };
             affecting.forEach(function (affected) {
-                return u(_this.gameState.Model(affected).Count.Event()
-                    .Register(function () { return _this.updateCapacity(); }));
+                return u(_this.gameState.Model(affected).Count.register(function () { return _this.updateCapacity(); }));
             });
             // remove old callbacks
             this.refreshCleanup();
@@ -774,7 +760,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 createThingRow(thingName);
             }
         };
-        model.Revealed.Event().Register(create);
+        model.Revealed.register(create);
     }
     function createThingRow(thingName) {
         var outerDiv = document.createElement('div');
@@ -795,16 +781,16 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         var redraw = function () { return m.redraw(); };
         var u = function (unreg) { return toUnload.push(unreg); };
         var vm = thingViewModels.GetViewModel(entity);
-        u(vm.ButtonEnabled.Event().Register(redraw));
-        u(vm.ButtonText.Event().Register(redraw));
-        u(vm.ButtonTitle.Event().Register(redraw));
-        u(vm.Capacity.Event().Register(redraw));
-        u(vm.CapacityShown.Event().Register(redraw));
-        u(vm.Count.Event().Register(redraw));
-        u(vm.DisplayText.Event().Register(redraw));
-        u(vm.Progress.Event().Register(redraw));
+        u(vm.ButtonEnabled.register(redraw));
+        u(vm.ButtonText.register(redraw));
+        u(vm.ButtonTitle.register(redraw));
+        u(vm.Capacity.register(redraw));
+        u(vm.CapacityShown.register(redraw));
+        u(vm.Count.register(redraw));
+        u(vm.DisplayText.register(redraw));
+        u(vm.Progress.register(redraw));
         var unregReveal;
-        unregReveal = game.Model(thingName).Revealed.Event().Register(function (revealed) {
+        unregReveal = game.Model(thingName).Revealed.register(function (revealed) {
             if (revealed) {
                 return;
             }

@@ -236,71 +236,65 @@ define("views", ["require", "exports"], function (require, exports) {
 });
 define("event", ["require", "exports"], function (require, exports) {
     "use strict";
-    var Property;
-    (function (Property) {
-        // this hacks together a property starting with a function, then adding
-        // the other fields to it manually. Hopefully I'll figure out a less awful
-        // way to do this at some point.
-        function create(current) {
-            var _this = this;
-            var _a = GameEvent.create(), register = _a.register, fire = _a.fire;
-            var property = (function (value) {
-                // call with no argument to get, otherwise set
-                if (value === undefined) {
-                    return property.current;
-                }
-                if (typeof value === "function") {
-                    setTimeout(function () {
-                        var val = value();
-                        property.setValue(val);
-                    });
-                }
-                else {
-                    property.setValue(value);
-                }
-            });
-            property.setValue = function (value) {
-                // setValue always fires the first time, even without a change in value.
-                if (property.current === value && property.hasFired) {
-                    return _this.current;
-                }
-                property.hasFired = true;
-                var previous = property.current;
-                property.current = value;
-                fire(function (callback) { return callback(property.current, previous); });
+    function event() {
+        var callbacks = [];
+        var unregister = function (callback) {
+            var index = callbacks.indexOf(callback);
+            if (index === -1) {
+                return false;
+            }
+            callbacks.splice(index, 1);
+            return true;
+        };
+        return {
+            register: function (callback) {
+                callbacks.push(callback);
+                return function () { return unregister(callback); };
+            },
+            fire: function (caller) {
+                callbacks.forEach(function (callback) { return caller(callback); });
+            }
+        };
+    }
+    exports.event = event;
+    // this hacks together a property starting with a function, then adding
+    // the other fields to it manually. Hopefully I'll figure out a less awful
+    // way to do this at some point.
+    function property(current) {
+        var _this = this;
+        var _a = event(), register = _a.register, fire = _a.fire;
+        var property = (function (value) {
+            // call with no argument to get, otherwise set
+            if (value === undefined) {
                 return property.current;
-            };
-            property.register = register;
-            property.current = current;
-            property.hasFired = false;
-            return property;
-        }
-        Property.create = create;
-    })(Property = exports.Property || (exports.Property = {}));
-    var GameEvent;
-    (function (GameEvent) {
-        function create() {
-            var callbacks = [];
-            var unregister = function (callback) {
-                var index = callbacks.indexOf(callback);
-                if (index === -1) {
-                    return false;
-                }
-                callbacks.splice(index, 1);
-                return true;
-            };
-            return {
-                register: function (callback) {
-                    callbacks.push(callback);
-                    return function () { return unregister(callback); };
-                },
-                fire: function (caller) {
-                    callbacks.forEach(function (callback) { return caller(callback); });
-                }
-            };
-        }
-        GameEvent.create = create;
-    })(GameEvent = exports.GameEvent || (exports.GameEvent = {}));
+            }
+            if (typeof value === "function") {
+                setTimeout(function () {
+                    var val = value();
+                    property.setValue(val);
+                });
+            }
+            else {
+                property.setValue(value);
+            }
+        });
+        property.setValue = function (value) {
+            // setValue always fires the first time, even without a change in value.
+            if (property.current === value && property.hasFired) {
+                return _this.current;
+            }
+            property.hasFired = true;
+            var previous = property.current;
+            property.current = value;
+            fire(function (callback) { return callback(property.current, previous); });
+            return property.current;
+        };
+        property.register = register;
+        property.current = current;
+        property.hasFired = false;
+        return property;
+    }
+    exports.property = property;
 });
 define("app", ["require", "exports", "gamedata", "views", "event"], function (require, exports, gamedata, views, event_1) {
     "use strict";
@@ -315,16 +309,16 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
     var ThingType = (function () {
         function ThingType(tt) {
             this.name = tt.name;
-            this.Display = event_1.Property.create(tt.display);
-            this.Title = event_1.Property.create(tt.title);
-            this.Cost = event_1.Property.create(tt.cost);
-            this.Capacity = event_1.Property.create(tt.capacity);
-            this.Income = event_1.Property.create(tt.income);
-            this.CapacityEffect = event_1.Property.create(tt.capacityEffect);
-            this.CostRatio = event_1.Property.create(tt.costRatio);
-            this.ZeroAtCapacity = event_1.Property.create(tt.zeroAtCapacity);
-            this.IncomeWhenZeroed = event_1.Property.create(tt.incomeWhenZeroed);
-            this.ProgressThing = event_1.Property.create(tt.progressThing);
+            this.Display = event_1.property(tt.display);
+            this.Title = event_1.property(tt.title);
+            this.Cost = event_1.property(tt.cost);
+            this.Capacity = event_1.property(tt.capacity);
+            this.Income = event_1.property(tt.income);
+            this.CapacityEffect = event_1.property(tt.capacityEffect);
+            this.CostRatio = event_1.property(tt.costRatio);
+            this.ZeroAtCapacity = event_1.property(tt.zeroAtCapacity);
+            this.IncomeWhenZeroed = event_1.property(tt.incomeWhenZeroed);
+            this.ProgressThing = event_1.property(tt.progressThing);
         }
         ThingType.prototype.GetName = function () {
             return this.name;
@@ -369,14 +363,14 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.thingName = this.thingType.GetName();
             this.model = game.Model(this.thingName);
             // fill in initial values
-            this.DisplayText = event_1.Property.create(this.thingType.Display());
-            this.Progress = event_1.Property.create(this.calculateProgress());
-            this.Count = event_1.Property.create(this.model.Count());
-            this.CapacityShown = event_1.Property.create(this.model.CapacityRevealed());
-            this.Capacity = event_1.Property.create(this.model.Capacity());
-            this.ButtonText = event_1.Property.create(this.calculateButtonText());
-            this.ButtonEnabled = event_1.Property.create(this.model.Purchasable());
-            this.ButtonTitle = event_1.Property.create(this.thingType.Title());
+            this.DisplayText = event_1.property(this.thingType.Display());
+            this.Progress = event_1.property(this.calculateProgress());
+            this.Count = event_1.property(this.model.Count());
+            this.CapacityShown = event_1.property(this.model.CapacityRevealed());
+            this.Capacity = event_1.property(this.model.Capacity());
+            this.ButtonText = event_1.property(this.calculateButtonText());
+            this.ButtonEnabled = event_1.property(this.model.Purchasable());
+            this.ButtonTitle = event_1.property(this.thingType.Title());
             this.setupEvents();
         }
         ThingViewModel.prototype.setupProgressEvent = function () {
@@ -461,7 +455,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.entityLookup = {};
             this.models = [];
             this.modelLookup = {};
-            this.gameEvent = event_1.GameEvent.create();
+            this.gameEvent = event_1.event();
         }
         GameState.prototype.GetEntities = function () { return this.entities; };
         GameState.prototype.GetThingNames = function () { return this.thingNames; };
@@ -532,17 +526,17 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var _this = this;
             // values from the game save
             this.everRevealed = saveData.IsRevealed;
-            this.Revealed = event_1.Property.create(saveData.IsRevealed);
+            this.Revealed = event_1.property(saveData.IsRevealed);
             this.Revealed.register(function (reveal) { return _this.everRevealed = _this.everRevealed || reveal; });
-            this.CapacityRevealed = event_1.Property.create(saveData.IsCapShown);
-            this.Count = event_1.Property.create(saveData.Count);
+            this.CapacityRevealed = event_1.property(saveData.IsCapShown);
+            this.Count = event_1.property(saveData.Count);
             // derivative values
-            this.CanAfford = event_1.Property.create(true);
-            this.AtCapacity = event_1.Property.create(false);
-            this.Capacity = event_1.Property.create(-1);
-            this.Price = event_1.Property.create({});
+            this.CanAfford = event_1.property(true);
+            this.AtCapacity = event_1.property(false);
+            this.Capacity = event_1.property(-1);
+            this.Price = event_1.property({});
             // calculated properties
-            this.Purchasable = event_1.Property.create(false);
+            this.Purchasable = event_1.property(false);
             var updatePurchasable = function () { return _this.Purchasable(_this.CanAfford() && !_this.AtCapacity()); };
             this.CanAfford.register(updatePurchasable);
             this.AtCapacity.register(updatePurchasable);

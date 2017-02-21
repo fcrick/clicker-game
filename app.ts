@@ -1,6 +1,6 @@
 ﻿import * as gamedata from './gamedata';
 import * as views from './views';
-import { GameEvent, Property} from './event';
+import { GameEvent, Property, event, property } from './event';
 
 let definitions = gamedata.definitions;
 let thingRow = views.thingRow;
@@ -84,16 +84,16 @@ class ThingType {
 
     constructor(tt: ThingTypeData) {
         this.name = tt.name;
-        this.Display = Property.create(tt.display);
-        this.Title = Property.create(tt.title);
-        this.Cost = Property.create(tt.cost);
-        this.Capacity = Property.create(tt.capacity);
-        this.Income = Property.create(tt.income);
-        this.CapacityEffect = Property.create(tt.capacityEffect);
-        this.CostRatio = Property.create(tt.costRatio);
-        this.ZeroAtCapacity = Property.create(tt.zeroAtCapacity);
-        this.IncomeWhenZeroed = Property.create(tt.incomeWhenZeroed);
-        this.ProgressThing = Property.create(tt.progressThing);
+        this.Display = property(tt.display);
+        this.Title = property(tt.title);
+        this.Cost = property(tt.cost);
+        this.Capacity = property(tt.capacity);
+        this.Income = property(tt.income);
+        this.CapacityEffect = property(tt.capacityEffect);
+        this.CostRatio = property(tt.costRatio);
+        this.ZeroAtCapacity = property(tt.zeroAtCapacity);
+        this.IncomeWhenZeroed = property(tt.incomeWhenZeroed);
+        this.ProgressThing = property(tt.progressThing);
     }
 }
 
@@ -146,16 +146,16 @@ export class ThingViewModel {
         this.model = game.Model(this.thingName);
 
         // fill in initial values
-        this.DisplayText = Property.create(this.thingType.Display());
-        this.Progress = Property.create(this.calculateProgress());
+        this.DisplayText = property(this.thingType.Display());
+        this.Progress = property(this.calculateProgress());
 
-        this.Count = Property.create(this.model.Count());
-        this.CapacityShown = Property.create(this.model.CapacityRevealed());
-        this.Capacity = Property.create(this.model.Capacity());
+        this.Count = property(this.model.Count());
+        this.CapacityShown = property(this.model.CapacityRevealed());
+        this.Capacity = property(this.model.Capacity());
 
-        this.ButtonText = Property.create(this.calculateButtonText());
-        this.ButtonEnabled = Property.create(this.model.Purchasable());
-        this.ButtonTitle = Property.create(this.thingType.Title());
+        this.ButtonText = property(this.calculateButtonText());
+        this.ButtonEnabled = property(this.model.Purchasable());
+        this.ButtonTitle = property(this.thingType.Title());
 
         this.setupEvents();
     }
@@ -265,7 +265,7 @@ class GameState {
         this.models = [];
         this.modelLookup = {};
 
-        this.gameEvent = GameEvent.create<() => void>();
+        this.gameEvent = event<void>();
     }
 
     public GetEntities() { return this.entities; }
@@ -317,7 +317,7 @@ class GameState {
         [thingName: string]: ThingModel;
     }
 
-    private gameEvent: GameEvent<{ (): void }>;
+    private gameEvent: GameEvent<void>;
 }
 
 class ThingModel {
@@ -390,21 +390,21 @@ class ThingModel {
     createProperties(saveData: ThingSaveData) {
         // values from the game save
         this.everRevealed = saveData.IsRevealed;
-        this.Revealed = Property.create(saveData.IsRevealed);
+        this.Revealed = property(saveData.IsRevealed);
         this.Revealed.register(reveal => this.everRevealed = this.everRevealed || reveal);
 
-        this.CapacityRevealed = Property.create(saveData.IsCapShown);
-        this.Count = Property.create(saveData.Count);
+        this.CapacityRevealed = property(saveData.IsCapShown);
+        this.Count = property(saveData.Count);
 
         // derivative values
-        this.CanAfford =  Property.create(true);
-        this.AtCapacity = Property.create(false);
+        this.CanAfford =  property(true);
+        this.AtCapacity = property(false);
 
-        this.Capacity = Property.create(-1);
-        this.Price = Property.create<NumberMap>({});
+        this.Capacity = property(-1);
+        this.Price = property<NumberMap>({});
 
         // calculated properties
-        this.Purchasable = Property.create(false);
+        this.Purchasable = property(false);
         var updatePurchasable = () => this.Purchasable(
             this.CanAfford() && !this.AtCapacity()
         );

@@ -1,7 +1,5 @@
 ﻿
-type Change<T> = {
-    (current?: T, previous?: T): void;
-};
+type Change<T> = {(current?: T, previous?: T): void};
 
 export type GameEvent<T> = {
     register(callback: Change<T>): () => boolean;
@@ -34,58 +32,48 @@ export function event<T>(): GameEvent<T> {
 
 export type Property<T> = {
     (value?: T | { (): T }): T;
-    register(callback: Change<T>): () => void;
+    register(callback: Change<T>): () => boolean;
 };
 
-type PropertyInternal<T> = {
-    current: T;
-    hasFired: boolean;
-    (value?: T | { (): T }): T;
-    setValue: (value: T) => T;
-    register: (callback: (current?: T, previous?: T) => void) => () => void;
-};
-
-// this hacks together a property starting with a function, then adding
-// the other fields to it manually. Hopefully I'll figure out a less awful
-// way to do this at some point.
-export function property<T>(current: T): Property<T> {
+export function property<T>(initial: T): Property<T> {
+    // hide our internal state away in a closure
     let { register, fire } = event<T>();
-    let property = <PropertyInternal<T>>(
-        function(value?: T | { (): T}): T {
-            // call with no argument to get, otherwise set
-            if (value === undefined) {
-                return property.current;
-            }
-            if (typeof value === "function") {
-                setTimeout(() => {
-                    var val = (<() => T>value)();
-                    property.setValue(val);
-                });
-            }
-            else {
-                property.setValue(<T>value);
-            }
-        }
-    );
+    let hasFired = false;
+    let current: T = initial;
 
-    property.setValue = (value: T) => {
+    let setValue = (value: T) => {
         // setValue always fires the first time, even without a change in value.
-        if (property.current === value && property.hasFired) {
-            return this.current;
+        if (current === value && hasFired) {
+            return current;
         }
 
-        property.hasFired = true;
+        hasFired = true;
 
-        var previous = property.current;
-        property.current = value;
-        fire(callback => callback(property.current, previous));
+        let previous = current;
+        current = value;
+        fire(callback => callback(current, previous));
 
-        return property.current;
+        return current;
     };
 
+    // property is just a function with a single, optional argument
+    let property = <Property<T>>function(value?: T | { (): T}): T {
+        if (value === undefined) {
+            return current;
+        }
+        if (typeof value === "function") {
+            setTimeout(() => {
+                var val = (<() => T>value)();
+                setValue(val);
+            });
+        }
+        else {
+            setValue(<T>value);
+        }
+    };
+
+    // also allows callbacks to register for change events
     property.register = register;
-    property.current = current;
-    property.hasFired = false;
     return property;
 }
 

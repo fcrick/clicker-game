@@ -257,41 +257,39 @@ define("event", ["require", "exports"], function (require, exports) {
         };
     }
     exports.event = event;
-    // this hacks together a property starting with a function, then adding
-    // the other fields to it manually. Hopefully I'll figure out a less awful
-    // way to do this at some point.
-    function property(current) {
-        var _this = this;
+    function property(initial) {
+        // hide our internal state away in a closure
         var _a = event(), register = _a.register, fire = _a.fire;
-        var property = (function (value) {
-            // call with no argument to get, otherwise set
+        var hasFired = false;
+        var current = initial;
+        var setValue = function (value) {
+            // setValue always fires the first time, even without a change in value.
+            if (current === value && hasFired) {
+                return current;
+            }
+            hasFired = true;
+            var previous = current;
+            current = value;
+            fire(function (callback) { return callback(current, previous); });
+            return current;
+        };
+        // property is just a function with a single, optional argument
+        var property = function (value) {
             if (value === undefined) {
-                return property.current;
+                return current;
             }
             if (typeof value === "function") {
                 setTimeout(function () {
                     var val = value();
-                    property.setValue(val);
+                    setValue(val);
                 });
             }
             else {
-                property.setValue(value);
+                setValue(value);
             }
-        });
-        property.setValue = function (value) {
-            // setValue always fires the first time, even without a change in value.
-            if (property.current === value && property.hasFired) {
-                return _this.current;
-            }
-            property.hasFired = true;
-            var previous = property.current;
-            property.current = value;
-            fire(function (callback) { return callback(property.current, previous); });
-            return property.current;
         };
+        // also allows callbacks to register for change events
         property.register = register;
-        property.current = current;
-        property.hasFired = false;
         return property;
     }
     exports.property = property;

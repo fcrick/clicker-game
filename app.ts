@@ -46,63 +46,112 @@ interface SaveData {
 
 var saveData: SaveData;
 
-interface NumberMap {
+type NumberMap = {
     [thingName: string]: number;
 };
 
-export interface ThingTypeData {
-    name: string;
-    display?: string; // things without display are never shown
-    title?: string; // tooltip display
-    cost?: NumberMap;
-    capacity: number;
-    income?: NumberMap;
-    capacityEffect?: NumberMap;
-    costRatio?: number;
-    zeroAtCapacity?: boolean;
-    incomeWhenZeroed?: NumberMap;
-    progressThing?: string; // value is name of thing to show percentage of
+// export interface ThingTypeData {
+//     name: string;
+//     display?: string; // things without display are never shown
+//     title?: string; // tooltip display
+//     cost?: NumberMap;
+//     capacity: number;
+//     income?: NumberMap;
+//     capacityEffect?: NumberMap;
+//     costRatio?: number;
+//     zeroAtCapacity?: boolean;
+//     incomeWhenZeroed?: NumberMap;
+//     progressThing?: string; // value is name of thing to show percentage of
+// }
+
+let requiredFields = {
+    name: '',
+    capacity: 0,
+};
+
+let optionalFields = {
+    display: '',
+    title: '',
+    cost: <NumberMap>{},
+    income: <NumberMap>{},
+    capacityEffect: <NumberMap>{},
+    costRatio: 0,
+    zeroAtCapacity: false,
+    incomeWhenZeroed: <NumberMap>{},
+    progressThing: '',
+};
+
+export type ThingTypeData = Identity<
+    Partial<typeof optionalFields> &
+    typeof requiredFields
+>;
+
+// let foo2 = {
+//     ProgressThing: '',
+// };
+// let foo3 = Object.assign(foo2, foo);
+
+
+var keys = <{<T, U extends keyof T>(obj: T): U[]}><any>Object.keys;
+// let fooKeys = keys(foo);
+
+type Identity<T> = {
+    [P in keyof T]: T[P];
+};
+type Propertied<T> = {
+    [P in keyof T]: Property<T[P]>
 }
 
-class ThingType {
-    public GetName() {
-        return this.name;
-    }
-
-    private name: string;
-
-    public Display: Property<string>;
-    public Title: Property<string>;
-    public Cost: Property<NumberMap>;
-    public Capacity: Property<number>;
-    public Income: Property<NumberMap>;
-    public CapacityEffect: Property<NumberMap>;
-    public CostRatio: Property<number>;
-    public ZeroAtCapacity: Property<boolean>;
-    public IncomeWhenZeroed: Property<NumberMap>;
-    public ProgressThing: Property<string>;
-
-    constructor(tt: ThingTypeData) {
-        this.name = tt.name;
-        this.Display = Property(tt.display);
-        this.Title = Property(tt.title);
-        this.Cost = Property(tt.cost);
-        this.Capacity = Property(tt.capacity);
-        this.Income = Property(tt.income);
-        this.CapacityEffect = Property(tt.capacityEffect);
-        this.CostRatio = Property(tt.costRatio);
-        this.ZeroAtCapacity = Property(tt.zeroAtCapacity);
-        this.IncomeWhenZeroed = Property(tt.incomeWhenZeroed);
-        this.ProgressThing = Property(tt.progressThing);
-    }
+function propertize<T>(obj: T): Propertied<T> {
+    return keys(obj).reduce(
+        (o, k) => (o[k] = Property(obj[k]), o),
+        <Propertied<T>>{}
+    );
 }
+// let propertied = propertize(foo);
+
+type ThingType = Propertied<ThingTypeData>;
+
+// class ThingType {
+//     public GetName() {
+//         return this.name;
+//     }
+
+//     private name: string;
+
+//     public Display: Property<string>;
+//     public Title: Property<string>;
+//     public Cost: Property<NumberMap>;
+//     public Capacity: Property<number>;
+//     public Income: Property<NumberMap>;
+//     public CapacityEffect: Property<NumberMap>;
+//     public CostRatio: Property<number>;
+//     public ZeroAtCapacity: Property<boolean>;
+//     public IncomeWhenZeroed: Property<NumberMap>;
+//     public ProgressThing: Property<string>;
+
+//     constructor(tt: ThingTypeData) {
+//         keys(tt).forEach(key => this[key] = tt[key]);
+//         this.name = tt.name;
+//         this.Display = Property(tt.display);
+//         this.Title = Property(tt.title);
+//         this.Cost = Property(tt.cost);
+//         this.Capacity = Property(tt.capacity);
+//         this.Income = Property(tt.income);
+//         this.CapacityEffect = Property(tt.capacityEffect);
+//         this.CostRatio = Property(tt.costRatio);
+//         this.ZeroAtCapacity = Property(tt.zeroAtCapacity);
+//         this.IncomeWhenZeroed = Property(tt.incomeWhenZeroed);
+//         this.ProgressThing = Property(tt.progressThing);
+//     }
+// }
 
 class ThingViewModelCollection {
     private viewModels: { [thingName: string]: ThingViewModel } = {};
 
     public AddEntities(entities: ThingType[]) {
         entities.forEach(entity => {
-            var thingName = entity.GetName();
+            var thingName = entity.name();
 
             if (game.Model(thingName).Revealed()) {
                 this.viewModels[thingName] = new ThingViewModel(entity);
@@ -123,7 +172,7 @@ class ThingViewModelCollection {
     }
 
     public GetViewModel(entity: ThingType) {
-        return this.viewModels[entity.GetName()];
+        return this.viewModels[entity.name()];
     }
 }
 
@@ -142,11 +191,11 @@ export class ThingViewModel {
     public Buy = () => this.model.Buy();
 
     constructor(private thingType: ThingType) {
-        this.thingName = this.thingType.GetName();
+        this.thingName = this.thingType.name();
         this.model = game.Model(this.thingName);
 
         // fill in initial values
-        this.DisplayText = Property(this.thingType.Display());
+        this.DisplayText = Property(this.thingType.display());
         this.Progress = Property(this.calculateProgress());
 
         this.Count = Property(this.model.Count());
@@ -155,7 +204,7 @@ export class ThingViewModel {
 
         this.ButtonText = Property(this.calculateButtonText());
         this.ButtonEnabled = Property(this.model.Purchasable());
-        this.ButtonTitle = Property(this.thingType.Title());
+        this.ButtonTitle = Property(this.thingType.title());
 
         this.setupEvents();
     }
@@ -168,7 +217,7 @@ export class ThingViewModel {
         }
 
         // register new one if need
-        var progressThing = this.thingType.ProgressThing();
+        var progressThing = this.thingType.progressThing();
         if (progressThing) {
             var progresModel = game.Model(progressThing);
             this.progressUnreg = progresModel.Count.register(() => this.Progress(this.calculateProgress()));
@@ -185,21 +234,21 @@ export class ThingViewModel {
         var u = (callback: () => void) => this.costUnregs.push(callback);
 
         // change of name to anything in the cost of the entity
-        var cost = this.thingType.Cost();
+        var cost = this.thingType.cost();
         if (cost) {
             Object.keys(cost).forEach(costName => {
-                u(entityByName[costName].Display.register(() => this.calculateButtonText()));
+                u(entityByName[costName].display.register(() => this.calculateButtonText()));
             });
         }
 
-        u(this.thingType.Cost.register(() => this.setupButtonTextEvents()));
+        u(this.thingType.cost.register(() => this.setupButtonTextEvents()));
     }
 
     setupEvents() {
         var u = (callback: () => void) => this.unregs.push(callback);
 
         // set up events so properties update correctly
-        u(this.thingType.Display.register(newName => {
+        u(this.thingType.display.register(newName => {
             this.DisplayText(newName);
             this.ButtonText(this.calculateButtonText());
         }));
@@ -218,11 +267,11 @@ export class ThingViewModel {
         u(this.model.Capacity.register(newCapacity => this.Capacity(newCapacity)));
 
         u(this.model.Purchasable.register(enabled => this.ButtonEnabled(enabled)));
-        u(this.thingType.Title.register(newTitle => this.ButtonTitle(newTitle)));
+        u(this.thingType.title.register(newTitle => this.ButtonTitle(newTitle)));
     }
 
     calculateProgress(): number {
-        var progressThing = this.thingType.ProgressThing();
+        var progressThing = this.thingType.progressThing();
         if (!progressThing) {
             return 0;
         }
@@ -239,14 +288,14 @@ export class ThingViewModel {
     calculateButtonText(): string {
         var price = this.model.Price();
         var costString = Object.keys(price).map(thingName =>
-            price[thingName] + ' ' + entityByName[thingName].Display()
+            price[thingName] + ' ' + entityByName[thingName].display()
             ).join(', ');
 
         if (!costString) {
             costString = "FREE!";
         }
 
-        return 'Buy a ' + this.thingType.Display() + ' for ' + costString;
+        return 'Buy a ' + this.thingType.display() + ' for ' + costString;
     }
 
     private model: ThingModel;
@@ -285,7 +334,7 @@ class GameState {
         entities.forEach(entity => {
             this.entities.push(entity);
 
-            var thingName = entity.GetName();
+            var thingName = entity.name();
 
             this.thingNames.push(thingName);
             this.entityLookup[thingName] = entity;
@@ -326,7 +375,7 @@ class ThingModel {
         saveData: ThingSaveData,
         private gameState: GameState
     ) {
-        this.thingName = this.Type.GetName();
+        this.thingName = this.Type.name();
 
         this.createProperties(saveData);
 
@@ -421,7 +470,7 @@ class ThingModel {
 
     shouldReveal() {
         // don't show things without display names
-        if (!entityByName[this.thingName].Display()) {
+        if (!entityByName[this.thingName].display()) {
             return false;
         }
 
@@ -481,7 +530,7 @@ class CostComponent extends Component {
         var unregs: { (): void; }[] = [];
         var u = (unreg: { (): void; }) => unregs.push(unreg);
 
-        var cost = this.type.Cost();
+        var cost = this.type.cost();
         if (cost) {
             Object.keys(cost).forEach(affected =>
                 u(this.gameState.Model(affected).Count
@@ -494,12 +543,12 @@ class CostComponent extends Component {
     }
 
     private updateCost() {
-        var cost = this.type.Cost();
+        var cost = this.type.cost();
         if (!cost) {
             return {};
         }
 
-        var ratio = this.type.CostRatio();
+        var ratio = this.type.costRatio();
         if (ratio === 0) {
             this.model.Price(cost);
             return;
@@ -566,18 +615,18 @@ class CapacityComponent extends Component {
         var effectTable: { [thingName: string]: number } = {};
 
         this.gameState.GetEntities().forEach(entity => {
-            var effects = entity.CapacityEffect();
+            var effects = entity.capacityEffect();
             if (!effects) {
                 return;
             }
 
-            var effect = effects[this.type.GetName()];
+            var effect = effects[this.type.name()];
             if (effect) {
-                effectTable[entity.GetName()] = effect;
+                effectTable[entity.name()] = effect;
             }
         });
 
-        var initial = this.type.Capacity();
+        var initial = this.type.capacity();
         var affecting = Object.keys(effectTable);
 
         this.calculateCapacity = () => affecting.reduce(
@@ -618,11 +667,11 @@ class CapacityComponent extends Component {
         var count = countProp();
         if (count >= capacity) {
             // check if we're a special zero-at-capacity type
-            if (this.type.ZeroAtCapacity()) {
+            if (this.type.zeroAtCapacity()) {
                 var timesOver = Math.floor(count / capacity);
 
                 countProp(current - timesOver * capacity);
-                var income = this.type.IncomeWhenZeroed();
+                var income = this.type.incomeWhenZeroed();
                 if (income) {
                     Object.keys(income).forEach(earnedThing => {
                         var earnedCount = game.Model(earnedThing).Count;
@@ -758,7 +807,7 @@ function onInterval() {
     Object.keys(entityByName).forEach(thingName => {
         var model = game.Model(thingName);
         var type = model.Type;
-        var income = type.Income();
+        var income = type.income();
         var count = game.Model(thingName).Count();
         if (income && count) {
             Object.keys(income).forEach(earnedName => {
@@ -777,20 +826,20 @@ function onLoad() {
     }
     catch (e) { }
 
-    var entities = definitions.map(thingType => new ThingType(thingType));
+    var entities = definitions.map(thingType => propertize(thingType));
     addNewEntities(entities);
 
     setInterval(onInterval, 200);
 }
 
 function addNewEntities(entities: ThingType[]) {
-    entities.forEach(entity => entityByName[entity.GetName()] = entity);
+    entities.forEach(entity => entityByName[entity.name()] = entity);
     initializeSaveData();
     game.addEntities(entities, saveData);
     thingViewModels.AddEntities(entities);
-    entities.forEach(entity => createElementsForEntity(entity.GetName()));
+    entities.forEach(entity => createElementsForEntity(entity.name()));
 
-    Object.keys(entityByName).forEach(thingName => things[entityByName[thingName].Display()] = entityByName[thingName]);
+    Object.keys(entityByName).forEach(thingName => things[entityByName[thingName].display()] = entityByName[thingName]);
 }
 
 // i think i need something that will fire when the page finished loading
@@ -804,7 +853,7 @@ var things: { [index: string]: ThingType } = {};
 var nextId = 1;
 
 function Add(display: string) {
-    var newThingType: ThingTypeData = {
+    var newThingType = {
         name: '',
         capacity: -1,
         cost: {
@@ -818,7 +867,7 @@ function Add(display: string) {
     newThingType['name'] = 'tt-Custom' + nextId++;
     newThingType['display'] = display;
 
-    addNewEntities([new ThingType(newThingType)]);
+    addNewEntities([propertize(newThingType)]);
 }
 
 function ReAddAll() {
@@ -834,9 +883,9 @@ function ReAddAll() {
             json = json.replace(re, '"' + oldName + 'Again"');
         });
 
-        return JSON.parse(json);
+        return <ThingTypeData>JSON.parse(json);
     });
-    var entities = newDefs.map(thingType => new ThingType(thingType));
+    var entities = newDefs.map(thingType => propertize(thingType));
     addNewEntities(entities);
 
     definitions = newDefs;

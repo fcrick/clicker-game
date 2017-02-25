@@ -6,7 +6,7 @@ export type Event<T> = {
     fire(caller: (callback: Change<T>) => void): void;
 };
 
-export function Event   <T>(): Event<T> {
+export function Event<T>(): Event<T> {
     let callbacks: Change<T>[] = [];
     let unregister = (callback: Change<T>) => {
         var index = callbacks.indexOf(callback);

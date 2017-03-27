@@ -724,6 +724,8 @@ function createElementsForEntity(thingName: string) {
     model.Revealed.register(create);
 }
 
+declare var m:any;
+
 function createThingRow(thingName: string) {
     var outerDiv = document.createElement('div');
     outerDiv.className = 'row';

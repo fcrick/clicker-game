@@ -340,13 +340,14 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         incomeWhenZeroed: {},
         progressThing: ''
     };
-    // let foo2 = {
-    //     ProgressThing: '',
-    // };
-    // let foo3 = Object.assign(foo2, foo);
     var keys = Object.keys;
     function propertize(obj) {
         return keys(obj).reduce(function (o, k) { return (o[k] = event_1.Property(obj[k]), o); }, {});
+    }
+    function withAllProperties(obj, optionals) {
+        var copy = JSON.parse(JSON.stringify(optionals));
+        var filledIn = keys(obj).reduce(function (o, k) { return (copy[k] = obj[k], o); }, copy);
+        return propertize(filledIn);
     }
     // class ThingType {
     //     public GetName() {
@@ -891,8 +892,16 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             saveData = JSON.parse(localStorage['SaveData']);
         }
         catch (e) { }
-        var entities = definitions.map(function (thingType) { return propertize(thingType); });
-        addNewEntities(entities);
+        var entities = definitions.map(function (thingType) {
+            return withAllProperties(thingType, optionalFields);
+            // let copy = <typeof optionalFields>JSON.parse(JSON.stringify(optionalFields));
+            // let filled = keys(thingType).reduce(
+            //     (o, k) => (k in thingType ? (copy[k] = thingType[k], o) : o),
+            //     copy
+            // );
+            // return propertize(filled);
+        });
+        //addNewEntities(entities);
         setInterval(onInterval, 200);
     }
     function addNewEntities(entities) {
@@ -903,8 +912,8 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         entities.forEach(function (entity) { return createElementsForEntity(entity.name()); });
         Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].display()] = entityByName[thingName]; });
     }
-    // i think i need something that will fire when the page finished loading
-    window.onload = onLoad;
+    requirejs(['app'], function () { onLoad(); });
+    //window.onload = onLoad;
     var entityByName = {};
     var thingViewModels = new ThingViewModelCollection();
     var game = new GameState();
@@ -924,7 +933,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         };
         newThingType['name'] = 'tt-Custom' + nextId++;
         newThingType['display'] = display;
-        addNewEntities([propertize(newThingType)]);
+        addNewEntities([withAllProperties(newThingType, optionalFields)]);
     }
     function ReAddAll() {
         var oldNames = definitions.map(function (thingType) { return thingType.name; });
@@ -937,7 +946,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             });
             return JSON.parse(json);
         });
-        var entities = newDefs.map(function (thingType) { return propertize(thingType); });
+        var entities = newDefs.map(function (thingType) { return withAllProperties(thingType, optionalFields); });
         addNewEntities(entities);
         definitions = newDefs;
     }

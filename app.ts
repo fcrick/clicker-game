@@ -86,10 +86,11 @@ export type ThingTypeData = Identity<
     typeof requiredFields
 >;
 
-// let foo2 = {
-//     ProgressThing: '',
-// };
-// let foo3 = Object.assign(foo2, foo);
+export type ThingTypeAll = Identity<
+    typeof optionalFields &
+    typeof requiredFields
+>;
+
 
 
 var keys = <{<T, U extends keyof T>(obj: T): U[]}><any>Object.keys;
@@ -99,7 +100,7 @@ type Identity<T> = {
     [P in keyof T]: T[P];
 };
 type Propertied<T> = {
-    [P in keyof T]: Property<T[P]>
+    [P in keyof T|undefined]: Property<T[P]>
 }
 
 function propertize<T>(obj: T): Propertied<T> {
@@ -108,9 +109,17 @@ function propertize<T>(obj: T): Propertied<T> {
         <Propertied<T>>{}
     );
 }
-// let propertied = propertize(foo);
 
-type ThingType = Propertied<ThingTypeData>;
+function withAllProperties<T extends Partial<U>, U>(obj: T, optionals: U) {
+    let copy = <T & Partial<U>>JSON.parse(JSON.stringify(optionals));
+    let filledIn = keys(obj).reduce(
+        (o, k) => (copy[k] = obj[k], o),
+        <T & U>copy
+    );
+    return propertize(filledIn);
+}
+
+type ThingType = Propertied<ThingTypeAll>;
 
 // class ThingType {
 //     public GetName() {
@@ -828,8 +837,16 @@ function onLoad() {
     }
     catch (e) { }
 
-    var entities = definitions.map(thingType => propertize(thingType));
-    addNewEntities(entities);
+    var entities = definitions.map(thingType => {
+        return withAllProperties(thingType, optionalFields);
+        // let copy = <typeof optionalFields>JSON.parse(JSON.stringify(optionalFields));
+        // let filled = keys(thingType).reduce(
+        //     (o, k) => (k in thingType ? (copy[k] = thingType[k], o) : o),
+        //     copy
+        // );
+        // return propertize(filled);
+    });
+    //addNewEntities(entities);
 
     setInterval(onInterval, 200);
 }
@@ -845,7 +862,9 @@ function addNewEntities(entities: ThingType[]) {
 }
 
 // i think i need something that will fire when the page finished loading
-window.onload = onLoad;
+declare var requirejs: (modules: string[], callback: () => void) => void;
+requirejs(['app'], function() { onLoad() });
+//window.onload = onLoad;
 var entityByName: { [index: string]: ThingType } = {};
 var thingViewModels = new ThingViewModelCollection();
 var game = new GameState();
@@ -855,7 +874,7 @@ var things: { [index: string]: ThingType } = {};
 var nextId = 1;
 
 function Add(display: string) {
-    var newThingType = {
+    var newThingType: ThingTypeData = {
         name: '',
         capacity: -1,
         cost: {
@@ -869,7 +888,7 @@ function Add(display: string) {
     newThingType['name'] = 'tt-Custom' + nextId++;
     newThingType['display'] = display;
 
-    addNewEntities([propertize(newThingType)]);
+    addNewEntities([withAllProperties(newThingType, optionalFields)]);
 }
 
 function ReAddAll() {
@@ -887,7 +906,7 @@ function ReAddAll() {
 
         return <ThingTypeData>JSON.parse(json);
     });
-    var entities = newDefs.map(thingType => propertize(thingType));
+    var entities = newDefs.map(thingType => withAllProperties(thingType, optionalFields));
     addNewEntities(entities);
 
     definitions = newDefs;

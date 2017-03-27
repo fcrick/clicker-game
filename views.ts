@@ -1,5 +1,7 @@
 ﻿import { ThingViewModel } from './app';
 
+declare var m: any;
+
 export var thingRow = {
     view: (vm: ThingViewModel) =>
         // row

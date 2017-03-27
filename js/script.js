@@ -1,10 +1,16 @@
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 define("gamedata", ["require", "exports"], function (require, exports) {
     "use strict";
+    exports.__esModule = true;
     exports.definitions = [
         {
             name: 'tt-Point',
@@ -201,6 +207,7 @@ define("gamedata", ["require", "exports"], function (require, exports) {
 });
 define("views", ["require", "exports"], function (require, exports) {
     "use strict";
+    exports.__esModule = true;
     exports.thingRow = {
         view: function (vm) {
             // row
@@ -236,6 +243,7 @@ define("views", ["require", "exports"], function (require, exports) {
 });
 define("event", ["require", "exports"], function (require, exports) {
     "use strict";
+    exports.__esModule = true;
     function Event() {
         var callbacks = [];
         var unregister = function (callback) {
@@ -296,6 +304,7 @@ define("event", ["require", "exports"], function (require, exports) {
 });
 define("app", ["require", "exports", "gamedata", "views", "event"], function (require, exports, gamedata, views, event_1) {
     "use strict";
+    exports.__esModule = true;
     var definitions = gamedata.definitions;
     var thingRow = views.thingRow;
     var resetButton = document.getElementById("resetButton");
@@ -303,26 +312,72 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
     resetButton.addEventListener('click', resetEverything, false);
     ;
     var saveData;
-    ;
-    var ThingType = (function () {
-        function ThingType(tt) {
-            this.name = tt.name;
-            this.Display = event_1.Property(tt.display);
-            this.Title = event_1.Property(tt.title);
-            this.Cost = event_1.Property(tt.cost);
-            this.Capacity = event_1.Property(tt.capacity);
-            this.Income = event_1.Property(tt.income);
-            this.CapacityEffect = event_1.Property(tt.capacityEffect);
-            this.CostRatio = event_1.Property(tt.costRatio);
-            this.ZeroAtCapacity = event_1.Property(tt.zeroAtCapacity);
-            this.IncomeWhenZeroed = event_1.Property(tt.incomeWhenZeroed);
-            this.ProgressThing = event_1.Property(tt.progressThing);
-        }
-        ThingType.prototype.GetName = function () {
-            return this.name;
-        };
-        return ThingType;
-    }());
+    // export interface ThingTypeData {
+    //     name: string;
+    //     display?: string; // things without display are never shown
+    //     title?: string; // tooltip display
+    //     cost?: NumberMap;
+    //     capacity: number;
+    //     income?: NumberMap;
+    //     capacityEffect?: NumberMap;
+    //     costRatio?: number;
+    //     zeroAtCapacity?: boolean;
+    //     incomeWhenZeroed?: NumberMap;
+    //     progressThing?: string; // value is name of thing to show percentage of
+    // }
+    var requiredFields = {
+        name: '',
+        capacity: 0
+    };
+    var optionalFields = {
+        display: '',
+        title: '',
+        cost: {},
+        income: {},
+        capacityEffect: {},
+        costRatio: 0,
+        zeroAtCapacity: false,
+        incomeWhenZeroed: {},
+        progressThing: ''
+    };
+    // let foo2 = {
+    //     ProgressThing: '',
+    // };
+    // let foo3 = Object.assign(foo2, foo);
+    var keys = Object.keys;
+    function propertize(obj) {
+        return keys(obj).reduce(function (o, k) { return (o[k] = event_1.Property(obj[k]), o); }, {});
+    }
+    // class ThingType {
+    //     public GetName() {
+    //         return this.name;
+    //     }
+    //     private name: string;
+    //     public Display: Property<string>;
+    //     public Title: Property<string>;
+    //     public Cost: Property<NumberMap>;
+    //     public Capacity: Property<number>;
+    //     public Income: Property<NumberMap>;
+    //     public CapacityEffect: Property<NumberMap>;
+    //     public CostRatio: Property<number>;
+    //     public ZeroAtCapacity: Property<boolean>;
+    //     public IncomeWhenZeroed: Property<NumberMap>;
+    //     public ProgressThing: Property<string>;
+    //     constructor(tt: ThingTypeData) {
+    //         keys(tt).forEach(key => this[key] = tt[key]);
+    //         this.name = tt.name;
+    //         this.Display = Property(tt.display);
+    //         this.Title = Property(tt.title);
+    //         this.Cost = Property(tt.cost);
+    //         this.Capacity = Property(tt.capacity);
+    //         this.Income = Property(tt.income);
+    //         this.CapacityEffect = Property(tt.capacityEffect);
+    //         this.CostRatio = Property(tt.costRatio);
+    //         this.ZeroAtCapacity = Property(tt.zeroAtCapacity);
+    //         this.IncomeWhenZeroed = Property(tt.incomeWhenZeroed);
+    //         this.ProgressThing = Property(tt.progressThing);
+    //     }
+    // }
     var ThingViewModelCollection = (function () {
         function ThingViewModelCollection() {
             this.viewModels = {};
@@ -330,7 +385,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         ThingViewModelCollection.prototype.AddEntities = function (entities) {
             var _this = this;
             entities.forEach(function (entity) {
-                var thingName = entity.GetName();
+                var thingName = entity.name();
                 if (game.Model(thingName).Revealed()) {
                     _this.viewModels[thingName] = new ThingViewModel(entity);
                 }
@@ -347,7 +402,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             return Object.keys(this.viewModels).map(function (key) { return _this.viewModels[key]; });
         };
         ThingViewModelCollection.prototype.GetViewModel = function (entity) {
-            return this.viewModels[entity.GetName()];
+            return this.viewModels[entity.name()];
         };
         return ThingViewModelCollection;
     }());
@@ -358,17 +413,17 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.Buy = function () { return _this.model.Buy(); };
             this.unregs = [];
             this.costUnregs = [];
-            this.thingName = this.thingType.GetName();
+            this.thingName = this.thingType.name();
             this.model = game.Model(this.thingName);
             // fill in initial values
-            this.DisplayText = event_1.Property(this.thingType.Display());
+            this.DisplayText = event_1.Property(this.thingType.display());
             this.Progress = event_1.Property(this.calculateProgress());
             this.Count = event_1.Property(this.model.Count());
             this.CapacityShown = event_1.Property(this.model.CapacityRevealed());
             this.Capacity = event_1.Property(this.model.Capacity());
             this.ButtonText = event_1.Property(this.calculateButtonText());
             this.ButtonEnabled = event_1.Property(this.model.Purchasable());
-            this.ButtonTitle = event_1.Property(this.thingType.Title());
+            this.ButtonTitle = event_1.Property(this.thingType.title());
             this.setupEvents();
         }
         ThingViewModel.prototype.setupProgressEvent = function () {
@@ -379,7 +434,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 this.progressUnreg = null;
             }
             // register new one if need
-            var progressThing = this.thingType.ProgressThing();
+            var progressThing = this.thingType.progressThing();
             if (progressThing) {
                 var progresModel = game.Model(progressThing);
                 this.progressUnreg = progresModel.Count.register(function () { return _this.Progress(_this.calculateProgress()); });
@@ -394,19 +449,19 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             }
             var u = function (callback) { return _this.costUnregs.push(callback); };
             // change of name to anything in the cost of the entity
-            var cost = this.thingType.Cost();
+            var cost = this.thingType.cost();
             if (cost) {
                 Object.keys(cost).forEach(function (costName) {
-                    u(entityByName[costName].Display.register(function () { return _this.calculateButtonText(); }));
+                    u(entityByName[costName].display.register(function () { return _this.calculateButtonText(); }));
                 });
             }
-            u(this.thingType.Cost.register(function () { return _this.setupButtonTextEvents(); }));
+            u(this.thingType.cost.register(function () { return _this.setupButtonTextEvents(); }));
         };
         ThingViewModel.prototype.setupEvents = function () {
             var _this = this;
             var u = function (callback) { return _this.unregs.push(callback); };
             // set up events so properties update correctly
-            u(this.thingType.Display.register(function (newName) {
+            u(this.thingType.display.register(function (newName) {
                 _this.DisplayText(newName);
                 _this.ButtonText(_this.calculateButtonText());
             }));
@@ -420,10 +475,10 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             u(this.model.CapacityRevealed.register(function (reveal) { return _this.CapacityShown(reveal); }));
             u(this.model.Capacity.register(function (newCapacity) { return _this.Capacity(newCapacity); }));
             u(this.model.Purchasable.register(function (enabled) { return _this.ButtonEnabled(enabled); }));
-            u(this.thingType.Title.register(function (newTitle) { return _this.ButtonTitle(newTitle); }));
+            u(this.thingType.title.register(function (newTitle) { return _this.ButtonTitle(newTitle); }));
         };
         ThingViewModel.prototype.calculateProgress = function () {
-            var progressThing = this.thingType.ProgressThing();
+            var progressThing = this.thingType.progressThing();
             if (!progressThing) {
                 return 0;
             }
@@ -436,12 +491,12 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         ThingViewModel.prototype.calculateButtonText = function () {
             var price = this.model.Price();
             var costString = Object.keys(price).map(function (thingName) {
-                return price[thingName] + ' ' + entityByName[thingName].Display();
+                return price[thingName] + ' ' + entityByName[thingName].display();
             }).join(', ');
             if (!costString) {
                 costString = "FREE!";
             }
-            return 'Buy a ' + this.thingType.Display() + ' for ' + costString;
+            return 'Buy a ' + this.thingType.display() + ' for ' + costString;
         };
         return ThingViewModel;
     }());
@@ -468,7 +523,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var initialize = function () { };
             entities.forEach(function (entity) {
                 _this.entities.push(entity);
-                var thingName = entity.GetName();
+                var thingName = entity.name();
                 _this.thingNames.push(thingName);
                 _this.entityLookup[thingName] = entity;
                 var model = new ThingModel(entity, saveData.Stuff[thingName], _this);
@@ -489,7 +544,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         function ThingModel(Type, saveData, gameState) {
             this.Type = Type;
             this.gameState = gameState;
-            this.thingName = this.Type.GetName();
+            this.thingName = this.Type.name();
             this.createProperties(saveData);
             this.saveEvents();
         }
@@ -545,7 +600,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         };
         ThingModel.prototype.shouldReveal = function () {
             // don't show things without display names
-            if (!entityByName[this.thingName].Display()) {
+            if (!entityByName[this.thingName].display()) {
                 return false;
             }
             if (this.everRevealed) {
@@ -599,7 +654,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var _this = this;
             var unregs = [];
             var u = function (unreg) { return unregs.push(unreg); };
-            var cost = this.type.Cost();
+            var cost = this.type.cost();
             if (cost) {
                 Object.keys(cost).forEach(function (affected) {
                     return u(_this.gameState.Model(affected).Count
@@ -611,11 +666,11 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.refreshCleanup = function () { return unregs.forEach(function (unreg) { return unreg(); }); };
         };
         CostComponent.prototype.updateCost = function () {
-            var cost = this.type.Cost();
+            var cost = this.type.cost();
             if (!cost) {
                 return {};
             }
-            var ratio = this.type.CostRatio();
+            var ratio = this.type.costRatio();
             if (ratio === 0) {
                 this.model.Price(cost);
                 return;
@@ -670,16 +725,16 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var _this = this;
             var effectTable = {};
             this.gameState.GetEntities().forEach(function (entity) {
-                var effects = entity.CapacityEffect();
+                var effects = entity.capacityEffect();
                 if (!effects) {
                     return;
                 }
-                var effect = effects[_this.type.GetName()];
+                var effect = effects[_this.type.name()];
                 if (effect) {
-                    effectTable[entity.GetName()] = effect;
+                    effectTable[entity.name()] = effect;
                 }
             });
-            var initial = this.type.Capacity();
+            var initial = this.type.capacity();
             var affecting = Object.keys(effectTable);
             this.calculateCapacity = function () { return affecting.reduce(function (sum, affecting) { return sum
                 + _this.gameState.Model(affecting).Count()
@@ -710,10 +765,10 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var count = countProp();
             if (count >= capacity) {
                 // check if we're a special zero-at-capacity type
-                if (this.type.ZeroAtCapacity()) {
+                if (this.type.zeroAtCapacity()) {
                     var timesOver = Math.floor(count / capacity);
                     countProp(current - timesOver * capacity);
-                    var income = this.type.IncomeWhenZeroed();
+                    var income = this.type.incomeWhenZeroed();
                     if (income) {
                         Object.keys(income).forEach(function (earnedThing) {
                             var earnedCount = game.Model(earnedThing).Count;
@@ -820,7 +875,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         Object.keys(entityByName).forEach(function (thingName) {
             var model = game.Model(thingName);
             var type = model.Type;
-            var income = type.Income();
+            var income = type.income();
             var count = game.Model(thingName).Count();
             if (income && count) {
                 Object.keys(income).forEach(function (earnedName) {
@@ -836,17 +891,17 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             saveData = JSON.parse(localStorage['SaveData']);
         }
         catch (e) { }
-        var entities = definitions.map(function (thingType) { return new ThingType(thingType); });
+        var entities = definitions.map(function (thingType) { return propertize(thingType); });
         addNewEntities(entities);
         setInterval(onInterval, 200);
     }
     function addNewEntities(entities) {
-        entities.forEach(function (entity) { return entityByName[entity.GetName()] = entity; });
+        entities.forEach(function (entity) { return entityByName[entity.name()] = entity; });
         initializeSaveData();
         game.addEntities(entities, saveData);
         thingViewModels.AddEntities(entities);
-        entities.forEach(function (entity) { return createElementsForEntity(entity.GetName()); });
-        Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].Display()] = entityByName[thingName]; });
+        entities.forEach(function (entity) { return createElementsForEntity(entity.name()); });
+        Object.keys(entityByName).forEach(function (thingName) { return things[entityByName[thingName].display()] = entityByName[thingName]; });
     }
     // i think i need something that will fire when the page finished loading
     window.onload = onLoad;
@@ -869,7 +924,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
         };
         newThingType['name'] = 'tt-Custom' + nextId++;
         newThingType['display'] = display;
-        addNewEntities([new ThingType(newThingType)]);
+        addNewEntities([propertize(newThingType)]);
     }
     function ReAddAll() {
         var oldNames = definitions.map(function (thingType) { return thingType.name; });
@@ -882,7 +937,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             });
             return JSON.parse(json);
         });
-        var entities = newDefs.map(function (thingType) { return new ThingType(thingType); });
+        var entities = newDefs.map(function (thingType) { return propertize(thingType); });
         addNewEntities(entities);
         definitions = newDefs;
     }

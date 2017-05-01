@@ -1,6 +1,10 @@
 {
     "compilerOptions": {
-        "target": "es5",
+        "lib": [
+            "es6",
+            "dom"
+        ],
+        "module": "amd",
         "out": "js/script.js",
         "watch": true
     }

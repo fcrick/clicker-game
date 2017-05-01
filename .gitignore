@@ -6,3 +6,4 @@ bin
 obj
 *.map
 .vs/config/applicationhost.config
+node_modules

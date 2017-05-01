@@ -1,0 +1,29 @@
+{
+  "name": "clicker-game",
+  "version": "1.0.0",
+  "description": "A clicker game in typescript.",
+  "main": "app.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fcrick/clicker-game.git"
+  },
+  "keywords": [
+    "incremental",
+    "clicker",
+    "game",
+    "idle",
+    "upgrades"
+  ],
+  "author": "Francis Crick",
+  "license": "Apache 2.0",
+  "bugs": {
+    "url": "https://github.com/fcrick/clicker-game/issues"
+  },
+  "homepage": "https://github.com/fcrick/clicker-game#readme",
+  "dependencies": {
+    "typescript": "^2.1.6"
+  }
+}

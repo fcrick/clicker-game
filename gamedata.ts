@@ -1,6 +1,6 @@
-﻿/// <reference path="app.ts"/>
+﻿import { ThingTypeData } from './app';
 
-var definitions = <ThingTypeData[]>[
+export var definitions = <ThingTypeData[]>[
     {
         name: 'tt-Point',
         display: 'Beer',

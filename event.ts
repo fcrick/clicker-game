@@ -1,78 +1,79 @@
-﻿/// <reference path="mithril.d.ts"/>
-/// <reference path="app.ts"/>
-/// <reference path="gamedata.ts"/>
+﻿
+type Change<T> = {(current?: T, previous?: T): void};
 
-interface IGameEvent<T> {
-    Register: (callback: T) => () => void;
-}
+export type Event<T> = {
+    register(callback: Change<T>): () => boolean;
+    fire(caller: (callback: Change<T>) => void): void;
+};
 
-class GameEvent<T> implements IGameEvent<T> {
-    callbacks: T[] = [];
-
-    public Register(callback: T): () => void {
-        this.callbacks.push(callback);
-        return () => this.unregister(callback);
-    }
-
-    unregister(callback: T) {
-        var index = this.callbacks.indexOf(callback);
+export function Event<T>(): Event<T> {
+    let callbacks: Change<T>[] = [];
+    let unregister = (callback: Change<T>) => {
+        var index = callbacks.indexOf(callback);
 
         if (index === -1) {
             return false;
         }
 
-        this.callbacks.splice(index, 1);
+        callbacks.splice(index, 1);
         return true;
-    }
+    };
 
-    public Fire(caller: (callback: T) => void) {
-        this.callbacks.forEach(callback => caller(callback));
+    return {
+        register: callback => {
+            callbacks.push(callback);
+            return () => unregister(callback);
+        },
+        fire: caller => {
+            callbacks.forEach(callback => caller(callback));
+        },
     }
 }
 
-class Property<T> {
-    private event: GameEvent<Property.Change<T>>;
-    private hasFired: boolean = false;
+export type Property<T> = {
+    (value?: T | { (): T }): T;
+    register(callback: Change<T>): () => boolean;
+};
 
-    constructor(private current: T) {
-        this.event = new GameEvent<Property.Change<T>>();
-    }
+export function Property<T>(initial: T): Property<T> {
+    // hide our internal state away in a closure
+    let { register, fire } = Event<T>();
+    let hasFired = false;
+    let current: T = initial;
 
-    public Get(): T {
-        return this.current;
-    }
+    let setValue = (value: T) => {
+        // setValue always fires the first time, even without a change in value.
+        if (current === value && hasFired) {
+            return current;
+        }
 
-    public Set(value: T | { (): T }) {
+        hasFired = true;
+
+        let previous = current;
+        current = value;
+        fire(callback => callback(current, previous));
+
+        return current;
+    };
+
+    // property is just a function with a single, optional argument
+    let property = <Property<T>>function(value?: T | { (): T}): T {
+        if (value === undefined) {
+            return current;
+        }
         if (typeof value === "function") {
             setTimeout(() => {
-                var val = (<{ (): T }>value)();
-                this.setValue(val);
+                var val = (<() => T>value)();
+                setValue(val);
             });
         }
         else {
-            this.setValue(<T>value);
+            setValue(<T>value);
         }
-    }
+    };
 
-    private setValue(value: T) {
-        if (this.current === value && this.hasFired) {
-            return;
-        }
-
-        this.hasFired = true;
-
-        var previous = this.current;
-        this.current = <T>value;
-        this.event.Fire(callback => callback(this.current, previous));
-    }
-
-    public Event() {
-        return this.event;
-    }
+    // also allows callbacks to register for change events
+    property.register = register;
+    return property;
 }
 
-module Property {
-    export interface Change<T> {
-        (current: T, previous: T): void;
-    }
-}

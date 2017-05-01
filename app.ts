@@ -455,8 +455,8 @@ class ThingModel {
         this.Count = Property(saveData.Count);
 
         // derivative values
-        this.CanAfford =  Property(true);
-        this.AtCapacity = Property(false);
+        this.CanAfford =  Property(false);
+        this.AtCapacity = Property(true);
 
         this.Capacity = Property(-1);
         this.Price = Property<NumberMap>({});
@@ -560,6 +560,7 @@ class CostComponent extends Component {
         var ratio = this.type.costRatio();
         if (ratio === 0) {
             this.model.Price(cost);
+            this.updateAffordability();
             return;
         }
 
@@ -846,7 +847,7 @@ function onLoad() {
         // );
         // return propertize(filled);
     });
-    //addNewEntities(entities);
+    addNewEntities(entities);
 
     setInterval(onInterval, 200);
 }

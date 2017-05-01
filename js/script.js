@@ -585,8 +585,8 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             this.CapacityRevealed = event_1.Property(saveData.IsCapShown);
             this.Count = event_1.Property(saveData.Count);
             // derivative values
-            this.CanAfford = event_1.Property(true);
-            this.AtCapacity = event_1.Property(false);
+            this.CanAfford = event_1.Property(false);
+            this.AtCapacity = event_1.Property(true);
             this.Capacity = event_1.Property(-1);
             this.Price = event_1.Property({});
             // calculated properties
@@ -674,6 +674,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             var ratio = this.type.costRatio();
             if (ratio === 0) {
                 this.model.Price(cost);
+                this.updateAffordability();
                 return;
             }
             if (!ratio) {
@@ -901,7 +902,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
             // );
             // return propertize(filled);
         });
-        //addNewEntities(entities);
+        addNewEntities(entities);
         setInterval(onInterval, 200);
     }
     function addNewEntities(entities) {

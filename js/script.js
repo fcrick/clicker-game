@@ -672,7 +672,7 @@ define("app", ["require", "exports", "gamedata", "views", "event"], function (re
                 return {};
             }
             var ratio = this.type.costRatio();
-            if (ratio === 0) {
+            if (ratio === 1) {
                 this.model.Price(cost);
                 this.updateAffordability();
                 return;

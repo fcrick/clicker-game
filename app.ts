@@ -558,7 +558,7 @@ class CostComponent extends Component {
         }
 
         var ratio = this.type.costRatio();
-        if (ratio === 0) {
+        if (ratio === 1) {
             this.model.Price(cost);
             this.updateAffordability();
             return;
